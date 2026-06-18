@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Modo oscuro por clase en <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   SEMS Web App — Design System (azul + blanco, claro/oscuro)
+   Coherente con la landing page.
+   ============================================================ */
+
+@theme {
+  --color-navy-950: #0a1224;
+  --color-navy-900: #0e1730;
+  --color-navy-850: #131d3b;
+  --color-navy-800: #1b2748;
+  --color-navy-700: #25345f;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    font-family: var(--font-sans);
+    @apply bg-slate-50 text-slate-700 dark:bg-navy-950 dark:text-slate-300;
+  }
+  ::selection {
+    background: #2563eb;
+    color: #fff;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #25345f;
+  background-clip: content-box;
+}
+
+/* Utilidades */
+.card {
+  @apply rounded-card border border-slate-200 bg-white shadow-sm dark:border-navy-800 dark:bg-navy-900 dark:shadow-none;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
