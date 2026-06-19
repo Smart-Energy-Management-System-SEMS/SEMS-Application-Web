@@ -21,9 +21,10 @@ export const api = axios.create({
 });
 
 // Agrega el JWT a cada petición.
+const SEND_AUTH = false;
 api.interceptors.request.use((config) => {
   const token = tokenStore.get();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (SEND_AUTH && token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
