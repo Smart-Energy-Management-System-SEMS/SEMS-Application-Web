@@ -15,9 +15,8 @@ export default function Dashboard() {
   const summary = useQuery({ queryKey: ["summary", user?.id], queryFn: () => getDashboardSummary(user!.id), enabled: !!user });
   const readings = useQuery({ queryKey: ["readings", user?.id, 14], queryFn: () => getReadings(user!.id, 14), enabled: !!user });
   const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
-  const recs = useQuery({ queryKey: ["recommendations"], queryFn: getRecommendations });
-  const anomalies = useQuery({ queryKey: ["anomalies"], queryFn: getAnomalies });
-
+  const recs = useQuery({ queryKey: ["recommendations", user?.id], queryFn: () => getRecommendations(user!.id), enabled: !!user });
+const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => getAnomalies(user!.id), enabled: !!user });
   const s = summary.data;
 
   return (

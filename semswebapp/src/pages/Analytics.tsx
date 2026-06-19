@@ -10,14 +10,15 @@ import {
   getRankings,
 } from "../services/analytics.service";
 import { soles, kwh as fmtKwh, pct } from "../lib/format";
-
+import { useAuth } from "../context/AuthContext";
 export default function Analytics() {
-  const qc = useQueryClient();
-  const recs = useQuery({ queryKey: ["recommendations"], queryFn: getRecommendations });
-  const anomalies = useQuery({ queryKey: ["anomalies"], queryFn: getAnomalies });
-  const prediction = useQuery({ queryKey: ["billPrediction"], queryFn: getBillPrediction });
-  const rankings = useQuery({ queryKey: ["rankings"], queryFn: getRankings });
 
+  const qc = useQueryClient();
+  const { user } = useAuth();
+ const recs = useQuery({ queryKey: ["recommendations", user?.id], queryFn: () => getRecommendations(user!.id), enabled: !!user });
+const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => getAnomalies(user!.id), enabled: !!user });
+const prediction = useQuery({ queryKey: ["billPrediction", user?.id], queryFn: () => getBillPrediction(user!.id), enabled: !!user });
+const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => getRankings(user!.id), enabled: !!user });
   const apply = useMutation({
     mutationFn: applyRecommendation,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recommendations"] }),
