@@ -19,12 +19,12 @@ export const demoUser: User = {
 };
 
 export const demoDevices: Device[] = [
-  { deviceId: "d-01", name: "Aire acondicionado", type: "Climatización", status: "ACTIVE", ratedPowerW: 1200, location: "Sala", lastSeen: "hace 2 min" },
-  { deviceId: "d-02", name: "Refrigeradora", type: "Cocina", status: "ACTIVE", ratedPowerW: 350, location: "Cocina", lastSeen: "hace 1 min" },
-  { deviceId: "d-03", name: "Terma eléctrica", type: "Baño", status: "ACTIVE", ratedPowerW: 1500, location: "Baño principal", lastSeen: "hace 5 min" },
-  { deviceId: "d-04", name: "Televisor", type: "Entretenimiento", status: "INACTIVE", ratedPowerW: 120, location: "Sala", lastSeen: "hace 3 h" },
-  { deviceId: "d-05", name: "Lavadora", type: "Lavandería", status: "MAINTENANCE", ratedPowerW: 500, location: "Patio", lastSeen: "hace 1 día" },
-  { deviceId: "d-06", name: "Microondas", type: "Cocina", status: "ACTIVE", ratedPowerW: 900, location: "Cocina", lastSeen: "hace 12 min" },
+  { deviceId: "d-01", externalDeviceCode: "AC-001", userId: "u-001", deviceName: "Aire acondicionado", deviceType: "AIR_CONDITIONER", brand: "Samsung", model: "AR12", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:00:00Z", updatedAt: "2026-06-01T10:00:00Z" },
+  { deviceId: "d-02", externalDeviceCode: "REF-002", userId: "u-001", deviceName: "Refrigeradora", deviceType: "REFRIGERATOR", brand: "LG", model: "GT29", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:05:00Z", updatedAt: "2026-06-01T10:05:00Z" },
+  { deviceId: "d-03", externalDeviceCode: "HEAT-003", userId: "u-001", deviceName: "Terma eléctrica", deviceType: "WATER_HEATER", brand: "Bosch", model: "Tronic", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:10:00Z", updatedAt: "2026-06-01T10:10:00Z" },
+  { deviceId: "d-04", externalDeviceCode: "TV-004", userId: "u-001", deviceName: "Televisor", deviceType: "TV", brand: "Sony", model: "Bravia", connectionProtocol: "WIFI", status: "INACTIVE", registeredAt: "2026-06-01T10:15:00Z", updatedAt: "2026-06-01T10:15:00Z" },
+  { deviceId: "d-05", externalDeviceCode: "WASH-005", userId: "u-001", deviceName: "Lavadora", deviceType: "WASHING_MACHINE", brand: "Mabe", model: "LMA", connectionProtocol: "BLUETOOTH", status: "MAINTENANCE", registeredAt: "2026-06-01T10:20:00Z", updatedAt: "2026-06-01T10:20:00Z" },
+  { deviceId: "d-06", externalDeviceCode: "MW-006", userId: "u-001", deviceName: "Microondas", deviceType: "MICROWAVE", brand: "Panasonic", model: "NN", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:25:00Z", updatedAt: "2026-06-01T10:25:00Z" },
 ];
 
 export function demoReadings(days = 14): EnergyReading[] {

@@ -17,14 +17,26 @@ export type DeviceStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
 
 export interface Device {
   deviceId: string;
-  name: string;
-  type: string; // p.ej. "Aire acondicionado", "Refrigeradora"
+  externalDeviceCode: string;
+  userId: string;
+  deviceName: string;
+  deviceType: string; // p.ej. "meter", "AIR_CONDITIONER", "SENSOR"
+  brand: string;
+  model: string;
+  connectionProtocol: string; // "WIFI", "BLUETOOTH"
   status: DeviceStatus;
-  ratedPowerW: number; // potencia del perfil de hardware
-  location?: string;
-  lastSeen?: string;
+  registeredAt?: string;
+  updatedAt?: string;
 }
-
+export interface CreateDevicePayload {
+  deviceName: string;
+  deviceType: string;
+  brand: string;
+  model: string;
+  connectionProtocol: string;
+  externalDeviceCode: string;
+  userId: string;
+}
 // Energy Monitoring Service
 export interface EnergyReading {
   date: string; // YYYY-MM-DD

@@ -1,14 +1,19 @@
 import { api, DEMO_MODE, delay } from "../lib/api";
 import { demoDevices } from "../lib/demo";
-import type { Device } from "../types";
+import type { Device, CreateDevicePayload } from "../types";
 
-export async function listDevices(): Promise<Device[]> {
+// Device Management Service (vía API Gateway).
+const BASE = "/api/v1/device-management";
+
+// Lista los dispositivos del usuario logueado (si pasamos su id) o todos.
+export async function listDevices(userId?: string): Promise<Device[]> {
   if (DEMO_MODE) {
     await delay();
     return demoDevices;
   }
-  const { data } = await api.get<Device[]>("/api/v1/devices");
-  return data;
+  const url = userId ? `${BASE}/users/${userId}/devices` : `${BASE}/devices`;
+  const { data } = await api.get<Device[]>(url);
+  return data ?? [];
 }
 
 export async function getDevice(deviceId: string): Promise<Device> {
@@ -16,23 +21,30 @@ export async function getDevice(deviceId: string): Promise<Device> {
     await delay(250);
     return demoDevices.find((d) => d.deviceId === deviceId) ?? demoDevices[0];
   }
-  const { data } = await api.get<Device>(`/api/v1/devices/${deviceId}`);
+  const { data } = await api.get<Device>(`${BASE}/devices/${deviceId}`);
   return data;
 }
 
-export async function createDevice(payload: Partial<Device>): Promise<Device> {
+export async function createDevice(payload: CreateDevicePayload): Promise<Device> {
   if (DEMO_MODE) {
     await delay();
+    const now = new Date().toISOString();
     return {
-      deviceId: `d-${Math.floor(Math.random() * 9000 + 1000)}`,
-      name: payload.name ?? "Nuevo dispositivo",
-      type: payload.type ?? "General",
+      deviceId: crypto.randomUUID(),
       status: "ACTIVE",
-      ratedPowerW: payload.ratedPowerW ?? 100,
-      location: payload.location,
-      lastSeen: "recién",
+      registeredAt: now,
+      updatedAt: now,
+      ...payload,
     };
   }
-  const { data } = await api.post<Device>("/api/v1/devices", payload);
+  const { data } = await api.post<Device>(`${BASE}/devices`, payload);
   return data;
+}
+
+export async function deleteDevice(deviceId: string): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(200);
+    return;
+  }
+  await api.delete(`${BASE}/devices/${deviceId}`);
 }
