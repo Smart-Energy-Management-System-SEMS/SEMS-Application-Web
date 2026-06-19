@@ -2,7 +2,8 @@ import { api, DEMO_MODE, delay } from "../lib/api";
 import { demoReadings, demoConsumption, demoMeters } from "../lib/demo";
 import type { EnergyReading, DeviceConsumption, EnergyMeter } from "../types";
 
-const BASE = "/api/v1/energy";
+// El gateway enruta los recursos directamente bajo /api/v1 (sin segmento /energy).
+const BASE = "/api/v1";
 
 interface RawReading { energy_kwh: number; timestamp: string; estimated_cost?: number; }
 interface RawConsumption { device_id: string; device_name: string; total_kwh: number; cost_estimate_soles: number; }
@@ -10,16 +11,13 @@ interface RawMeter { id: string; meter_serial: string; model: string; status: st
 
 export async function getReadings(userId: string, days = 14): Promise<EnergyReading[]> {
   if (DEMO_MODE) { await delay(); return demoReadings(days); }
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - days);
-  const { data } = await api.get<RawReading[]>(`${BASE}/energy-readings/range`, {
-    params: { user_id: userId, start_date: start.toISOString(), end_date: end.toISOString(), limit: 500 },
-  });
+  const { data } = await api.get<RawReading[]>(`${BASE}/energy-readings/user/${userId}`, { params: { limit: 200 } });
+  const cutoff = Date.now() - days * 86_400_000;
   const byDay = new Map<string, { kwh: number; cost: number }>();
   for (const r of data ?? []) {
-    const day = (r.timestamp ?? "").slice(0, 10);
-    if (!day) continue;
+    const t = new Date(r.timestamp).getTime();
+    if (isNaN(t) || t < cutoff) continue;
+    const day = r.timestamp.slice(0, 10);
     const acc = byDay.get(day) ?? { kwh: 0, cost: 0 };
     acc.kwh += r.energy_kwh ?? 0;
     acc.cost += r.estimated_cost ?? 0;

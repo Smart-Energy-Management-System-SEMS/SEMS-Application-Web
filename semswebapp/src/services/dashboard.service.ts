@@ -1,26 +1,30 @@
 import { DEMO_MODE, delay } from "../lib/api";
 import { demoSummary } from "../lib/demo";
 import type { DashboardSummary } from "../types";
-import { getDeviceConsumption } from "./energy.service";
+import { getDeviceConsumption, getReadings } from "./energy.service";
 import { listDevices } from "./devices.service";
 
 export async function getDashboardSummary(userId: string): Promise<DashboardSummary> {
   if (DEMO_MODE) { await delay(300); return demoSummary; }
-  const [consumptionRes, devicesRes] = await Promise.allSettled([
+  const [consumptionRes, devicesRes, readingsRes] = await Promise.allSettled([
     getDeviceConsumption(userId),
     listDevices(userId),
+    getReadings(userId, 30),
   ]);
   const consumption = consumptionRes.status === "fulfilled" ? consumptionRes.value : [];
   const devices = devicesRes.status === "fulfilled" ? devicesRes.value : [];
+  const readings = readingsRes.status === "fulfilled" ? readingsRes.value : [];
+  const consumptionKwh = consumption.reduce((s, c) => s + c.kwh, 0);
+  const readingsKwh = readings.reduce((s, r) => s + r.kwh, 0);
   const currentMonthCost = consumption.reduce((s, c) => s + c.cost, 0);
-  const totalKwh = consumption.reduce((s, c) => s + c.kwh, 0);
+  const totalKwh = consumptionKwh || readingsKwh;
   const activeDevices = devices.filter((d) => d.status === "ACTIVE").length;
   return {
     currentMonthCost: +currentMonthCost.toFixed(2),
     savingAmount: 0,
     savingPct: 0,
     projectedCost: +currentMonthCost.toFixed(2),
-    totalKwh: +totalKwh.toFixed(0),
+    totalKwh: +totalKwh.toFixed(2),
     activeDevices,
     unreadAlerts: 0,
   };
