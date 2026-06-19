@@ -5,17 +5,16 @@ import { Card, CardTitle, Loading, ErrorState, Badge } from "../components/ui";
 import ConsumptionChart from "../components/charts/ConsumptionChart";
 import { getReadings, getDeviceConsumption, getMeters } from "../services/energy.service";
 import { soles, kwh as fmtKwh } from "../lib/format";
+import { useAuth } from "../context/AuthContext";
 
 export default function Monitoring() {
+  const { user } = useAuth();
   const [metric, setMetric] = useState<"kwh" | "cost">("kwh");
   const [days, setDays] = useState(14);
 
-  const readings = useQuery({ queryKey: ["readings", days], queryFn: () => getReadings(days) });
-  const consumption = useQuery({ queryKey: ["consumption"], queryFn: getDeviceConsumption });
-  const meters = useQuery({ queryKey: ["meters"], queryFn: getMeters });
-
-  const totalKwh = readings.data?.reduce((s, r) => s + r.kwh, 0) ?? 0;
-  const totalCost = readings.data?.reduce((s, r) => s + r.cost, 0) ?? 0;
+  const readings = useQuery({ queryKey: ["readings", user?.id, days], queryFn: () => getReadings(user!.id, days), enabled: !!user });
+  const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
+  const meters = useQuery({ queryKey: ["meters", user?.id], queryFn: () => getMeters(user!.id), enabled: !!user });
 
   return (
     <div className="space-y-6">
@@ -50,7 +49,6 @@ export default function Monitoring() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300"><Zap className="h-5 w-5" /></span>
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400">Consumo ({days} días)</p>
-              <p className="font-display text-xl font-extrabold text-slate-900 dark:text-white">{fmtKwh(+totalKwh.toFixed(1))}</p>
             </div>
           </div>
         </Card>
@@ -59,7 +57,6 @@ export default function Monitoring() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><Receipt className="h-5 w-5" /></span>
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400">Costo ({days} días)</p>
-              <p className="font-display text-xl font-extrabold text-slate-900 dark:text-white">{soles(+totalCost.toFixed(2))}</p>
             </div>
           </div>
         </Card>

@@ -12,9 +12,9 @@ const deviceColors = ["#2563eb", "#0ea5e9", "#6366f1", "#f59e0b", "#10b981", "#9
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const summary = useQuery({ queryKey: ["summary"], queryFn: getDashboardSummary });
-  const readings = useQuery({ queryKey: ["readings", 14], queryFn: () => getReadings(14) });
-  const consumption = useQuery({ queryKey: ["consumption"], queryFn: getDeviceConsumption });
+  const summary = useQuery({ queryKey: ["summary", user?.id], queryFn: () => getDashboardSummary(user!.id), enabled: !!user });
+  const readings = useQuery({ queryKey: ["readings", user?.id, 14], queryFn: () => getReadings(user!.id, 14), enabled: !!user });
+  const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
   const recs = useQuery({ queryKey: ["recommendations"], queryFn: getRecommendations });
   const anomalies = useQuery({ queryKey: ["anomalies"], queryFn: getAnomalies });
 
