@@ -49,8 +49,16 @@ export async function getDeviceConsumption(userId: string): Promise<DeviceConsum
   if (DEMO_MODE) { await delay(); return demoConsumption; }
 
   // 1) Agregados oficiales (si existen).
-  const { data } = await api.get<RawConsumption[]>(`${BASE}/device-consumptions/user/${userId}`, { params: { limit: 50 } });
-  const agg = data ?? [];
+  let agg: RawConsumption[] = [];
+  try {
+    const { data } = await api.get<RawConsumption[]>(
+      `${BASE}/device-consumptions/user/${userId}`,
+      { params: { limit: 50 } }
+    );
+    agg = data ?? [];
+  } catch {
+    agg = [];
+  }
   if (agg.length > 0) {
     const total = agg.reduce((s, c) => s + (c.total_kwh ?? 0), 0) || 1;
     return agg.map((c) => ({
