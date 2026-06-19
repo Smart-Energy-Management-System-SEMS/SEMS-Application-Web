@@ -10,7 +10,7 @@ interface RawReading { device_id: string; energy_kwh: number; timestamp: string;
 interface RawConsumption { device_id: string; device_name: string; total_kwh: number; cost_estimate_soles: number; }
 interface RawMeter { id: string; meter_serial: string; model: string; status: string; }
 
-async function getReadingsRaw(userId: string, limit = 500): Promise<RawReading[]> {
+async function getReadingsRaw(userId: string, limit = 200): Promise<RawReading[]> {
   const { data } = await api.get<RawReading[]>(`${BASE}/energy-readings/user/${userId}`, { params: { limit } });
   return data ?? [];
 }
