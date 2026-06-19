@@ -7,6 +7,7 @@ export type AlertType = "THRESHOLD" | "ANOMALY" | "INACTIVITY";
 export interface Alert {
   id: string;
   type: AlertType;
+  title: string;
   deviceName: string;
   message: string;
   severity: AlertSeverity;

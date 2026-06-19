@@ -12,7 +12,7 @@ import {
 } from "../services/alerts.service";
 import { kwh as fmtKwh } from "../lib/format";
 import type { AlertStatus, NotificationPreference } from "../types/alerts";
-
+import { useAuth } from "../context/AuthContext";
 const tabs: { key: AlertStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "Todas" },
   { key: "ACTIVE", label: "Activas" },
@@ -34,22 +34,21 @@ const typeLabel: Record<string, string> = {
 
 export default function Alerts() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [tab, setTab] = useState<AlertStatus | "ALL">("ALL");
 
-  const alerts = useQuery({ queryKey: ["alerts"], queryFn: getAlerts });
-  const thresholds = useQuery({ queryKey: ["thresholds"], queryFn: getThresholds });
-  const prefs = useQuery({ queryKey: ["preferences"], queryFn: getNotificationPreferences });
-
+   const alerts = useQuery({ queryKey: ["alerts", user?.id], queryFn: () => getAlerts(user!.id), enabled: !!user });
+  const thresholds = useQuery({ queryKey: ["thresholds", user?.id], queryFn: () => getThresholds(user!.id), enabled: !!user });
+  const prefs = useQuery({ queryKey: ["preferences", user?.id], queryFn: () => getNotificationPreferences(user!.id), enabled: !!user });
   const resolve = useMutation({
     mutationFn: (id: string) => updateAlertStatus(id, "RESOLVED"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
-  const togglePref = useMutation({
-    mutationFn: (p: NotificationPreference) => updateNotificationPreference(p.channel, !p.enabled),
+    const togglePref = useMutation({
+    mutationFn: (p: NotificationPreference) => updateNotificationPreference(user!.id, p.channel, !p.enabled),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["preferences"] }),
   });
-
   const filtered = (alerts.data ?? []).filter((a) => tab === "ALL" || a.status === tab);
 
   return (
@@ -99,8 +98,7 @@ export default function Alerts() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{a.deviceName}</p>
-                      <Badge color="slate">{typeLabel[a.type]}</Badge>
+<span className="text-[11px] text-slate-400">{a.deviceName ? `${a.deviceName} · ` : ""}{a.createdAt}</span>                      <Badge color="slate">{typeLabel[a.type]}</Badge>
                       <SeverityBadge severity={a.severity} />
                       <Badge color={statusBadge[a.status].color}>{statusBadge[a.status].label}</Badge>
                     </div>

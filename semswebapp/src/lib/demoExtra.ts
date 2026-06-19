@@ -8,11 +8,10 @@ import type {
 
 // ---------- Alertas ----------
 export const demoAlerts: Alert[] = [
-  { id: "al-01", type: "THRESHOLD", deviceName: "Aire acondicionado", message: "Superó el umbral de 8 kWh/día.", severity: "HIGH", status: "ACTIVE", createdAt: "Hoy, 03:12" },
-  { id: "al-02", type: "ANOMALY", deviceName: "Terma eléctrica", message: "Consumo 35% por encima de tu promedio semanal.", severity: "MEDIUM", status: "ACTIVE", createdAt: "Ayer, 19:40" },
-  { id: "al-03", type: "INACTIVITY", deviceName: "Lavadora", message: "Sin actividad por más de 7 días.", severity: "LOW", status: "ACKNOWLEDGED", createdAt: "Lun, 09:15" },
-  { id: "al-04", type: "THRESHOLD", deviceName: "Microondas", message: "Encendido por tiempo prolongado.", severity: "LOW", status: "RESOLVED", createdAt: "Dom, 13:02" },
-];
+   { id: "al-01", type: "THRESHOLD", title: "Consumo elevado detectado", deviceName: "Aire acondicionado", message: "Superó el umbral de 8 kWh/día.", severity: "HIGH", status: "ACTIVE", createdAt: "Hoy, 03:12" },
+  { id: "al-02", type: "ANOMALY", title: "Anomalía de consumo", deviceName: "Terma eléctrica", message: "Consumo 35% por encima de tu promedio semanal.", severity: "MEDIUM", status: "ACTIVE", createdAt: "Ayer, 19:40" },
+  { id: "al-03", type: "INACTIVITY", title: "Dispositivo inactivo", deviceName: "Lavadora", message: "Sin actividad por más de 7 días.", severity: "LOW", status: "ACKNOWLEDGED", createdAt: "Lun, 09:15" },
+  { id: "al-04", type: "THRESHOLD", title: "Umbral superado", deviceName: "Microondas", message: "Encendido por tiempo prolongado.", severity: "LOW", status: "RESOLVED", createdAt: "Dom, 13:02" },];
 
 export const demoThresholds: Threshold[] = [
   { id: "th-01", deviceName: "Aire acondicionado", maxKwhPerDay: 8, enabled: true },
