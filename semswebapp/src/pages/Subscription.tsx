@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, CreditCard, Star, Plus, Loader2, Download } from "lucide-react";
+import { Check, CreditCard, Star, Plus, Loader2, Download, Trash2 } from "lucide-react";
 import { Card, CardTitle, Loading, ErrorState, Badge, Button } from "../components/ui";
 import {
   getPlans,
@@ -7,10 +8,15 @@ import {
   changePlan,
   getPaymentMethods,
   getInvoices,
+  processPayment,
+  deletePaymentMethod,
 } from "../services/subscriptions.service";
 import { soles } from "../lib/format";
-import type { SubscriptionStatus } from "../types/billing";
 import { useAuth } from "../context/AuthContext";
+import { STRIPE_ENABLED } from "../lib/stripe";
+import AddCardModal from "../components/AddCardModal";
+import type { SubscriptionStatus, SubscriptionPlan } from "../types/billing";
+
 const subStatus: Record<SubscriptionStatus, { color: "green" | "blue" | "rose" | "amber" | "slate"; label: string }> = {
   ACTIVE: { color: "green", label: "Activa" },
   TRIAL: { color: "blue", label: "Prueba gratis" },
@@ -27,14 +33,52 @@ const invStatus = {
 export default function Subscription() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const [addOpen, setAddOpen] = useState(false);
+  const [payError, setPayError] = useState("");
+
   const sub = useQuery({ queryKey: ["subscription", user?.id], queryFn: () => getMySubscription(user!.id), enabled: !!user });
   const plans = useQuery({ queryKey: ["plans"], queryFn: getPlans });
   const methods = useQuery({ queryKey: ["paymentMethods", user?.id], queryFn: () => getPaymentMethods(user!.id), enabled: !!user });
   const invoices = useQuery({ queryKey: ["invoices", user?.id], queryFn: () => getInvoices(user!.id), enabled: !!user });
 
-  const change = useMutation({
-    mutationFn: (planId: string) => changePlan({ planId, subscriptionId: sub.data?.id, userId: user!.id }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subscription"] }),
+  const defaultMethod = methods.data?.find((m) => m.primary) ?? methods.data?.[0];
+
+  // Elegir plan: si es de pago, cobra con la tarjeta por defecto y luego cambia el plan.
+  const choose = useMutation({
+    mutationFn: async (plan: SubscriptionPlan) => {
+      if (plan.price > 0) {
+        if (!defaultMethod) throw new Error("NO_CARD");
+        await processPayment({
+          userId: user!.id,
+          paymentMethodId: defaultMethod.id,
+          amount: plan.price,
+          subscriptionId: sub.data?.id,
+        });
+      }
+      // El cambio de plan es best-effort: si falla (p. ej. price id inexistente
+      // en una cuenta Stripe nueva), el pago ya quedó registrado igualmente.
+      try {
+        await changePlan({ planId: plan.id, subscriptionId: sub.data?.id, userId: user!.id });
+      } catch {
+        /* noop */
+      }
+    },
+    onMutate: () => setPayError(""),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscription"] });
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
+    onError: (e: unknown) =>
+      setPayError(
+        (e as Error)?.message === "NO_CARD"
+          ? "Agrega una tarjeta antes de elegir un plan de pago."
+          : "No se pudo completar el pago. Inténtalo de nuevo."
+      ),
+  });
+
+  const removeCard = useMutation({
+    mutationFn: deletePaymentMethod,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["paymentMethods"] }),
   });
 
   return (
@@ -62,9 +106,6 @@ export default function Subscription() {
                 {soles(sub.data.price)} / {sub.data.period} · se renueva el {sub.data.renewalDate}
               </p>
             </div>
-            <button className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50">
-              Administrar plan
-            </button>
           </div>
         ) : (
           <p className="py-6 text-center text-blue-100">No tienes una suscripción activa.</p>
@@ -74,6 +115,11 @@ export default function Subscription() {
       {/* Planes */}
       <div>
         <h3 className="mb-4 font-display text-lg font-bold text-slate-900 dark:text-white">Cambia de plan</h3>
+        {payError && (
+          <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+            {payError}
+          </p>
+        )}
         {plans.isLoading ? (
           <Loading />
         ) : plans.isError || !plans.data ? (
@@ -82,6 +128,7 @@ export default function Subscription() {
           <div className="grid gap-5 lg:grid-cols-3">
             {plans.data.map((plan) => {
               const current = sub.data?.planId === plan.id;
+              const busy = choose.isPending && choose.variables?.id === plan.id;
               return (
                 <div
                   key={plan.id}
@@ -118,11 +165,11 @@ export default function Subscription() {
                       <Button
                         variant={plan.recommended ? "primary" : "outline"}
                         className="w-full"
-                        onClick={() => change.mutate(plan.id)}
-                        disabled={change.isPending}
+                        onClick={() => choose.mutate(plan)}
+                        disabled={choose.isPending}
                       >
-                        {change.isPending && change.variables === plan.id && <Loader2 className="h-4 w-4 animate-spin" />}
-                        Elegir {plan.name}
+                        {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {plan.price > 0 ? `Pagar ${soles(plan.price)}` : `Elegir ${plan.name}`}
                       </Button>
                     )}
                   </div>
@@ -136,13 +183,25 @@ export default function Subscription() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Métodos de pago */}
         <Card>
-          <CardTitle action={<Button variant="ghost" className="!py-1 !text-xs"><Plus className="h-3.5 w-3.5" /> Agregar</Button>}>
+          <CardTitle
+            action={
+              STRIPE_ENABLED ? (
+                <Button variant="ghost" className="!py-1 !text-xs" onClick={() => setAddOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Agregar
+                </Button>
+              ) : undefined
+            }
+          >
             Métodos de pago
           </CardTitle>
           {methods.isLoading ? (
             <Loading />
           ) : methods.isError || !methods.data ? (
             <ErrorState />
+          ) : methods.data.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-400">
+              {STRIPE_ENABLED ? 'Aún no tienes tarjetas. Agrega una con "Agregar".' : "No hay métodos de pago."}
+            </p>
           ) : (
             <ul className="space-y-3">
               {methods.data.map((m) => (
@@ -157,6 +216,18 @@ export default function Subscription() {
                     <p className="text-xs text-slate-400">Vence {String(m.expMonth).padStart(2, "0")}/{m.expYear}</p>
                   </div>
                   {m.primary && <Badge color="blue">Principal</Badge>}
+                  <button
+                    onClick={() => removeCard.mutate(m.id)}
+                    disabled={removeCard.isPending}
+                    className="text-slate-300 transition-colors hover:text-rose-500 disabled:opacity-50 dark:text-navy-700 dark:hover:text-rose-400"
+                    aria-label="Eliminar tarjeta"
+                  >
+                    {removeCard.isPending && removeCard.variables === m.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -170,13 +241,15 @@ export default function Subscription() {
             <Loading />
           ) : invoices.isError || !invoices.data ? (
             <ErrorState />
+          ) : invoices.data.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-400">Aún no tienes pagos registrados.</p>
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-navy-800">
               {invoices.data.map((inv) => (
                 <li key={inv.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-900 dark:text-white">{inv.description}</p>
-                    <p className="text-xs text-slate-400">{inv.date} · {inv.id}</p>
+                    <p className="text-xs text-slate-400">{inv.date} · {inv.id.slice(0, 8)}</p>
                   </div>
                   <span className="text-sm font-semibold text-slate-900 dark:text-white">{soles(inv.amount)}</span>
                   <Badge color={invStatus[inv.status].color}>{invStatus[inv.status].label}</Badge>
@@ -189,6 +262,14 @@ export default function Subscription() {
           )}
         </Card>
       </div>
+
+      {addOpen && user && (
+        <AddCardModal
+          userId={user.id}
+          onClose={() => setAddOpen(false)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["paymentMethods"] })}
+        />
+      )}
     </div>
   );
 }

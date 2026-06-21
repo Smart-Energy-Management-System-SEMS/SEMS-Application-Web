@@ -177,7 +177,49 @@ export async function getPaymentMethods(userId: string): Promise<PaymentMethod[]
     primary: Boolean(m.is_default),
   }));
 }
+// Registra en el backend una tarjeta ya tokenizada por Stripe (pm_xxx).
+export async function addPaymentMethod(userId: string, stripePaymentMethodId: string): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(300);
+    return;
+  }
+  await api.post(`${BASE}/payment-methods`, {
+    user_id: userId,
+    type: "card",
+    stripe_payment_method_id: stripePaymentMethodId,
+    is_default: true,
+  });
+}
 
+export async function deletePaymentMethod(paymentMethodId: string): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(200);
+    return;
+  }
+  await api.delete(`${BASE}/payment-methods/${paymentMethodId}`);
+}
+
+// Procesa un pago real vía Stripe (crea PaymentIntent + factura en la BD).
+export async function processPayment(args: {
+  userId: string;
+  paymentMethodId: string;
+  amount: number;
+  subscriptionId?: string;
+  currency?: string;
+}): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(500);
+    return;
+  }
+  await api.post(`${BASE}/payments/process`, {
+    user_id: args.userId,
+    payment_method_id: args.paymentMethodId,
+    subscription_id: args.subscriptionId,
+    amount: args.amount,
+    currency: (args.currency ?? "pen").toLowerCase(),
+    payment_method: "card",
+  });
+}
 // Payments no tiene "facturas por usuario"; armamos el historial desde los pagos.
 export async function getInvoices(userId: string): Promise<Invoice[]> {
   if (DEMO_MODE) {
