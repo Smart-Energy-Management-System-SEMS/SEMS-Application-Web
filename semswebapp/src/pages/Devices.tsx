@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Cpu, X, Loader2, Wifi, Bluetooth } from "lucide-react";
 import { Card, Button, Badge, Loading, ErrorState } from "../components/ui";
 import { Field, inputCls } from "./Login";
-import { listDevices, createDevice } from "../services/devices.service";
 import { useAuth } from "../context/AuthContext";
+import { Plus, Cpu, X, Loader2, Wifi, Bluetooth, Trash2 } from "lucide-react";
+import { listDevices, createDevice, deleteDevice } from "../services/devices.service";
+
 import type { Device, DeviceStatus, CreateDevicePayload } from "../types";
 
 const statusMap: Record<DeviceStatus, { color: "green" | "slate" | "amber"; label: string }> = {
@@ -31,6 +32,10 @@ export default function Devices() {
     },
   });
 
+  const remove = useMutation({
+    mutationFn: deleteDevice,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+  });
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -54,7 +59,12 @@ export default function Devices() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {devices.data.map((d) => (
-            <DeviceCard key={d.deviceId} device={d} />
+            <DeviceCard
+              key={d.deviceId}
+              device={d}
+              onDelete={() => remove.mutate(d.deviceId)}
+              deleting={remove.isPending && remove.variables === d.deviceId}
+            />
           ))}
         </div>
       )}
@@ -71,15 +81,27 @@ export default function Devices() {
   );
 }
 
-function DeviceCard({ device }: { device: Device }) {
+function DeviceCard({ device, onDelete, deleting }: { device: Device; onDelete: () => void; deleting: boolean }) {
   const st = statusMap[device.status] ?? statusMap.INACTIVE;
+  const [confirm, setConfirm] = useState(false);
+
   return (
     <Card>
       <div className="flex items-start justify-between">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
           <Cpu className="h-5 w-5" />
         </span>
-        <Badge color={st.color}>{st.label}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge color={st.color}>{st.label}</Badge>
+          <button
+            onClick={() => setConfirm(true)}
+            disabled={deleting}
+            title="Eliminar dispositivo"
+            className="text-slate-300 transition-colors hover:text-rose-500 disabled:opacity-50 dark:text-navy-700 dark:hover:text-rose-400"
+          >
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
       <h3 className="mt-4 font-semibold text-slate-900 dark:text-white">{device.deviceName}</h3>
       <p className="text-xs text-slate-400">{device.deviceType}</p>
@@ -97,6 +119,21 @@ function DeviceCard({ device }: { device: Device }) {
         />
         <Row label="Código" value={device.externalDeviceCode} />
       </div>
+
+      {confirm && (
+        <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm dark:border-rose-500/30 dark:bg-rose-500/10">
+          <p className="text-rose-700 dark:text-rose-300">¿Eliminar <strong>{device.deviceName}</strong>? Esta acción no se puede deshacer.</p>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button variant="outline" className="!py-1.5 !text-xs" onClick={() => setConfirm(false)}>Cancelar</Button>
+            <Button
+              className="!bg-rose-600 !py-1.5 !text-xs hover:!bg-rose-700"
+              onClick={() => { setConfirm(false); onDelete(); }}
+            >
+              Eliminar
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
