@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Cpu,
@@ -9,6 +10,8 @@ import {
   Zap,
   X,
 } from "lucide-react";
+import { getMySubscription } from "../services/subscriptions.service";
+import { useAuth } from "../context/AuthContext";
 
 const nav = [
   { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
@@ -71,11 +74,41 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
           </ul>
         </nav>
 
-        <div className="absolute inset-x-3 bottom-4 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 p-4 text-white">
-          <p className="text-sm font-bold">Plan Premium</p>
-          <p className="mt-1 text-xs text-blue-100/90">Desbloquea analítica avanzada y proyección de factura.</p>
-        </div>
+        <PlanCard onClose={onClose} />
       </aside>
     </>
+  );
+}
+
+function PlanCard({ onClose }: { onClose: () => void }) {
+  const { user } = useAuth();
+  const sub = useQuery({
+    queryKey: ["subscription", user?.id],
+    queryFn: () => getMySubscription(user!.id),
+    enabled: !!user,
+  });
+
+  const planName = sub.data?.planName;
+  // Plan de pago activo => mostramos el plan; Free o sin plan => invitamos a mejorar.
+  const isPaid = !!planName && (sub.data?.price ?? 0) > 0;
+
+  return (
+    <NavLink
+      to="/subscription"
+      onClick={onClose}
+      className="absolute inset-x-3 bottom-4 block rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 p-4 text-white transition-opacity hover:opacity-95"
+    >
+      {isPaid ? (
+        <>
+          <p className="text-sm font-bold">Plan {planName}</p>
+          <p className="mt-1 text-xs text-blue-100/90">Tu plan está activo. Administra tu suscripción.</p>
+        </>
+      ) : (
+        <>
+          <p className="text-sm font-bold">Mejora tu plan</p>
+          <p className="mt-1 text-xs text-blue-100/90">Desbloquea analítica avanzada y proyección de factura.</p>
+        </>
+      )}
+    </NavLink>
   );
 }
