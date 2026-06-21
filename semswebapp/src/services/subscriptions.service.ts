@@ -8,50 +8,188 @@ import {
 import type {
   SubscriptionPlan,
   Subscription,
+  SubscriptionStatus,
   PaymentMethod,
   Invoice,
 } from "../types/billing";
+
+// Subscriptions y Payments (vía API Gateway). Si el gateway usa otro prefijo,
+// cámbialo aquí (ambos servicios exponen sus rutas bajo /api/v1).
+const BASE = "/api/v1";
+
+// --- Subscriptions: el backend devuelve los campos en PascalCase ---
+interface RawPlanFeature { FeatureCode?: string; FeatureName?: string; FeatureValue?: string; }
+interface RawPlan {
+  PlanID?: string;
+  Name?: string;
+  Price?: number;
+  BillingPeriod?: string;
+  Description?: string;
+  Active?: boolean;
+  PlanFeatures?: RawPlanFeature[];
+}
+interface RawSubscription {
+  SubscriptionID?: string;
+  UserID?: string;
+  PlanID?: string;
+  Status?: string;
+  StartDate?: string;
+  EndDate?: string;
+  StripeSubscriptionID?: string;
+}
+
+// --- Payments: el backend devuelve los campos en snake_case ---
+interface RawPaymentMethod {
+  payment_method_id: string;
+  brand?: string;
+  last4?: string;
+  exp_month?: number;
+  exp_year?: number;
+  is_default?: boolean;
+}
+interface RawPayment {
+  payment_id: string;
+  amount?: number;
+  currency?: string;
+  status?: string;
+  paid_at?: string;
+  created_at?: string;
+}
+
+function periodLabel(billing?: string): "mes" | "año" {
+  return String(billing ?? "").toLowerCase().startsWith("year") ||
+    String(billing ?? "").toLowerCase().startsWith("annual") ||
+    String(billing ?? "").toLowerCase() === "yearly"
+    ? "año"
+    : "mes";
+}
+
+function planFeatures(p: RawPlan): string[] {
+  const feats = (p.PlanFeatures ?? [])
+    .filter((f) => (f.FeatureCode ?? "").toUpperCase() !== "STRIPE_PRICE_ID")
+    .map((f) => f.FeatureName || f.FeatureValue || "")
+    .filter(Boolean);
+  if (feats.length > 0) return feats;
+  return p.Description ? [p.Description] : [];
+}
+
+function mapPlan(p: RawPlan): SubscriptionPlan {
+  return {
+    id: p.PlanID ?? "",
+    name: p.Name ?? "Plan",
+    price: p.Price ?? 0,
+    period: periodLabel(p.BillingPeriod),
+    features: planFeatures(p),
+    recommended: (p.Name ?? "").toLowerCase().includes("pro"),
+  };
+}
+
+function normSubStatus(s?: string): SubscriptionStatus {
+  switch (String(s ?? "").toUpperCase()) {
+    case "CANCELLED":
+    case "CANCELED":
+      return "CANCELED";
+    case "TRIAL":
+    case "TRIALING":
+      return "TRIAL";
+    case "PAST_DUE":
+    case "UNPAID":
+      return "PAST_DUE";
+    default:
+      return "ACTIVE";
+  }
+}
 
 export async function getPlans(): Promise<SubscriptionPlan[]> {
   if (DEMO_MODE) {
     await delay();
     return demoPlans;
   }
-  const { data } = await api.get<SubscriptionPlan[]>("/api/v1/subscription-plans");
-  return data;
+  const { data } = await api.get<RawPlan[]>(`${BASE}/subscription-plans`);
+  return (data ?? []).map(mapPlan);
 }
 
-export async function getMySubscription(): Promise<Subscription | null> {
+// Suscripción actual del usuario (resuelve nombre/precio del plan).
+export async function getMySubscription(userId: string): Promise<Subscription | null> {
   if (DEMO_MODE) {
     await delay(300);
     return demoSubscription;
   }
-  const { data } = await api.get<Subscription>("/api/v1/subscriptions/me");
-  return data;
+  const [subsRes, plansRes] = await Promise.allSettled([
+    api.get<RawSubscription[]>(`${BASE}/subscriptions/users/${userId}`),
+    api.get<RawPlan[]>(`${BASE}/subscription-plans`),
+  ]);
+  const subs = subsRes.status === "fulfilled" ? subsRes.value.data ?? [] : [];
+  const plans = plansRes.status === "fulfilled" ? (plansRes.value.data ?? []).map(mapPlan) : [];
+  if (subs.length === 0) return null;
+
+  // Preferimos una activa; si no, la primera.
+  const raw = subs.find((s) => normSubStatus(s.Status) === "ACTIVE") ?? subs[0];
+  const plan = plans.find((p) => p.id === raw.PlanID);
+  return {
+    id: raw.SubscriptionID ?? "",
+    planId: raw.PlanID ?? "",
+    planName: plan?.name ?? raw.PlanID ?? "Plan",
+    status: normSubStatus(raw.Status),
+    renewalDate: (raw.EndDate ?? "").slice(0, 10) || "—",
+    price: plan?.price ?? 0,
+    period: plan?.period ?? "mes",
+  };
 }
 
-export async function changePlan(planId: string): Promise<void> {
+// Cambia de plan si ya hay suscripción; si no, crea una nueva.
+export async function changePlan(args: {
+  planId: string;
+  subscriptionId?: string;
+  userId: string;
+}): Promise<void> {
   if (DEMO_MODE) {
     await delay(400);
     return;
   }
-  await api.post("/api/v1/subscriptions/change", { planId });
+  if (args.subscriptionId) {
+    await api.patch(`${BASE}/subscriptions/${args.subscriptionId}/change-plan`, { new_plan_id: args.planId });
+  } else {
+    await api.post(`${BASE}/subscriptions`, { plan_id: args.planId, user_id: args.userId });
+  }
 }
 
-export async function getPaymentMethods(): Promise<PaymentMethod[]> {
+export async function cancelSubscription(subscriptionId: string): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(300);
+    return;
+  }
+  await api.patch(`${BASE}/subscriptions/${subscriptionId}/cancel`);
+}
+
+export async function getPaymentMethods(userId: string): Promise<PaymentMethod[]> {
   if (DEMO_MODE) {
     await delay(250);
     return demoPaymentMethods;
   }
-  const { data } = await api.get<PaymentMethod[]>("/api/v1/payments/payment-methods");
-  return data;
+  const { data } = await api.get<RawPaymentMethod[]>(`${BASE}/payment-methods/user/${userId}`);
+  return (data ?? []).map((m) => ({
+    id: m.payment_method_id,
+    brand: m.brand ? m.brand.charAt(0).toUpperCase() + m.brand.slice(1) : "Tarjeta",
+    last4: m.last4 ?? "····",
+    expMonth: m.exp_month ?? 0,
+    expYear: m.exp_year ?? 0,
+    primary: Boolean(m.is_default),
+  }));
 }
 
-export async function getInvoices(): Promise<Invoice[]> {
+// Payments no tiene "facturas por usuario"; armamos el historial desde los pagos.
+export async function getInvoices(userId: string): Promise<Invoice[]> {
   if (DEMO_MODE) {
     await delay();
     return demoInvoices;
   }
-  const { data } = await api.get<Invoice[]>("/api/v1/payments/invoices");
-  return data;
+  const { data } = await api.get<RawPayment[]>(`${BASE}/payments/user/${userId}`);
+  return (data ?? []).map((p) => ({
+    id: p.payment_id,
+    date: (p.paid_at || p.created_at || "").slice(0, 10),
+    amount: p.amount ?? 0,
+    status: p.status === "paid" ? "PAID" : p.status === "failed" ? "FAILED" : "PENDING",
+    description: `Pago ${String(p.currency ?? "PEN").toUpperCase()}`,
+  }));
 }

@@ -12,6 +12,7 @@ export interface SubscriptionPlan {
 }
 
 export interface Subscription {
+  id: string;
   planId: string;
   planName: string;
   status: SubscriptionStatus;

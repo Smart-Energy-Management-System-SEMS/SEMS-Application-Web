@@ -10,7 +10,7 @@ import {
 } from "../services/subscriptions.service";
 import { soles } from "../lib/format";
 import type { SubscriptionStatus } from "../types/billing";
-
+import { useAuth } from "../context/AuthContext";
 const subStatus: Record<SubscriptionStatus, { color: "green" | "blue" | "rose" | "amber" | "slate"; label: string }> = {
   ACTIVE: { color: "green", label: "Activa" },
   TRIAL: { color: "blue", label: "Prueba gratis" },
@@ -26,13 +26,14 @@ const invStatus = {
 
 export default function Subscription() {
   const qc = useQueryClient();
-  const sub = useQuery({ queryKey: ["subscription"], queryFn: getMySubscription });
+  const { user } = useAuth();
+  const sub = useQuery({ queryKey: ["subscription", user?.id], queryFn: () => getMySubscription(user!.id), enabled: !!user });
   const plans = useQuery({ queryKey: ["plans"], queryFn: getPlans });
-  const methods = useQuery({ queryKey: ["paymentMethods"], queryFn: getPaymentMethods });
-  const invoices = useQuery({ queryKey: ["invoices"], queryFn: getInvoices });
+  const methods = useQuery({ queryKey: ["paymentMethods", user?.id], queryFn: () => getPaymentMethods(user!.id), enabled: !!user });
+  const invoices = useQuery({ queryKey: ["invoices", user?.id], queryFn: () => getInvoices(user!.id), enabled: !!user });
 
   const change = useMutation({
-    mutationFn: changePlan,
+    mutationFn: (planId: string) => changePlan({ planId, subscriptionId: sub.data?.id, userId: user!.id }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subscription"] }),
   });
 

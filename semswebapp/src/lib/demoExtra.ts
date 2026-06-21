@@ -33,6 +33,7 @@ export const demoPlans: SubscriptionPlan[] = [
 ];
 
 export const demoSubscription: Subscription = {
+  id: "sub-demo-01",
   planId: "p-premium",
   planName: "Premium",
   status: "ACTIVE",
