@@ -3,14 +3,14 @@ import { useNavigate, Link } from "react-router-dom";
 import { Zap, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { DEMO_MODE } from "../lib/api";
+import GoogleSignInButton from "../components/GooglesSigninButton";
 
 export default function Login() {
-  const { login, loading } = useAuth();
+  const { login, loginWithGoogle, loading } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState(DEMO_MODE ? "demo@energix.pe" : "");
   const [password, setPassword] = useState(DEMO_MODE ? "demo1234" : "");
   const [error, setError] = useState("");
-
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -21,7 +21,15 @@ export default function Login() {
       setError("No se pudo iniciar sesión. Verifica tus credenciales.");
     }
   };
-
+  const onGoogle = async (idToken: string) => {
+    setError("");
+    try {
+      await loginWithGoogle(idToken);
+      navigate("/");
+    } catch {
+      setError("No se pudo iniciar sesión con Google.");
+    }
+  };
   return (
     <AuthShell title="Bienvenido de nuevo" subtitle="Ingresa para ver el consumo de tu hogar.">
       <form onSubmit={onSubmit} className="space-y-4">
@@ -62,12 +70,7 @@ export default function Login() {
           <div className="absolute inset-x-0 top-1/2 h-px bg-slate-200 dark:bg-navy-800" />
         </div>
 
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-navy-700 dark:text-slate-200 dark:hover:bg-navy-800"
-        >
-          <GoogleIcon /> Google
-        </button>
+         <GoogleSignInButton onCredential={onGoogle} />
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">

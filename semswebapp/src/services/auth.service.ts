@@ -57,7 +57,15 @@ export async function login(email: string, password: string): Promise<AuthRespon
   });
   return { token: data.token, user: mapUser(data) };
 }
-
+// Login con Google: el frontend obtiene un ID token (GIS) y el IAM lo verifica.
+export async function loginWithGoogle(idToken: string): Promise<AuthResponse> {
+  if (DEMO_MODE) {
+    await delay();
+    return { token: "demo-token", user: demoUser };
+  }
+  const { data } = await api.post<IamAuthResponse>("/api/v1/auth/google", { idToken });
+  return { token: data.token, user: mapUser(data) };
+}
 export async function register(
   fullName: string,
   email: string,

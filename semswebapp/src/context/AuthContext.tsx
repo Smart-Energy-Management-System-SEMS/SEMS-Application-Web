@@ -9,6 +9,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -50,7 +52,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   };
-
+  const loginWithGoogle = async (idToken: string) => {
+    setLoading(true);
+    try {
+      const res = await authService.loginWithGoogle(idToken);
+      persist(res.token, res.user);
+    } finally {
+      setLoading(false);
+    }
+  };
   const register = async (fullName: string, email: string, password: string) => {
     setLoading(true);
     try {
@@ -68,8 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-      {children}
+ <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, register, logout }}>      {children}
     </AuthContext.Provider>
   );
 }
