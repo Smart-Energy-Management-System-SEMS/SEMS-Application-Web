@@ -16,7 +16,6 @@ import type {
 // Analytics Service (vía API Gateway, mantiene el prefijo /api/v1/analytics).
 const BASE = "/api/v1/analytics";
 
-// Helpers tolerantes a distintos nombres de campo.
 function num(...vals: unknown[]): number {
   for (const v of vals) if (typeof v === "number" && !isNaN(v)) return v;
   return 0;
@@ -63,15 +62,27 @@ export async function getAnomalies(userId: string): Promise<Anomaly[]> {
     await delay();
     return demoAnomalies;
   }
-  const { data } = await api.get<Record<string, unknown>[]>(`${BASE}/anomalies/user/${userId}`);
-  return (data ?? []).map((a) => ({
-    id: str(a.id, a.anomaly_id),
-    deviceName: str(a.device_name, a.device_id, "Dispositivo"),
-    description: str(a.description, a.message, a.detail),
-    severity: normSeverity(a.severity),
-    detectedAt: str(a.detected_at, a.created_at),
-    resolved: Boolean(a.resolved ?? a.is_resolved ?? false),
-  }));
+  const [{ data }, devices] = await Promise.all([
+    api.get<Record<string, unknown>[]>(`${BASE}/anomalies/user/${userId}`),
+    listDevices(userId).catch(() => []),
+  ]);
+  // El backend manda device_id (UUID) en el campo y dentro del texto; lo
+  // reemplazamos por el nombre real del dispositivo.
+  const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
+  return (data ?? []).map((a) => {
+    const id = str(a.device_id);
+    const name = nameById.get(id) || (id ? `Dispositivo ${id.slice(0, 6)}` : "Dispositivo");
+    let description = str(a.description, a.message, a.detail);
+    if (id) description = description.split(id).join(name);
+    return {
+      id: str(a.id, a.anomaly_id),
+      deviceName: name,
+      description,
+      severity: normSeverity(a.severity),
+      detectedAt: str(a.detected_at, a.created_at),
+      resolved: Boolean(a.resolved ?? a.is_resolved ?? false),
+    };
+  });
 }
 
 export async function getBillPrediction(userId: string): Promise<BillPrediction | null> {
@@ -82,10 +93,8 @@ export async function getBillPrediction(userId: string): Promise<BillPrediction 
   const { data } = await api.get<unknown>(`${BASE}/bill-predictions/user/${userId}`);
   const p = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | undefined;
   if (!p) return null;
-  // Confianza: si el backend la da directa la usamos; si no, la derivamos
-  // del margen de error (margen 10% => confianza 90%).
   let confidence = num(p.confidence, p.confidence_score);
-  if (confidence > 1) confidence = confidence / 100; // normaliza si viene 0-100
+  if (confidence > 1) confidence = confidence / 100;
   if (confidence === 0) {
     const margin = num(p.error_margin_percentage, p.error_margin);
     if (margin > 0) confidence = Math.max(0, 1 - margin / 100);
@@ -104,11 +113,9 @@ export async function getRankings(userId: string): Promise<ConsumptionRanking[]>
     return demoRankings;
   }
   const { data } = await api.get<unknown>(`${BASE}/consumption-rankings/user/${userId}`);
-  // La respuesta es un array con un objeto que contiene rankings[].
   const root = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | undefined;
   const items = ((root?.rankings ?? (Array.isArray(data) ? data : [])) as Record<string, unknown>[]) ?? [];
 
-  // El backend manda device_name = UUID; cruzamos con los dispositivos reales.
   const devices = await listDevices(userId).catch(() => []);
   const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
 
@@ -120,7 +127,7 @@ export async function getRankings(userId: string): Promise<ConsumptionRanking[]>
       rank: num(r.rank, r.position) || i + 1,
       deviceName: real || (name && name !== id ? name : `Dispositivo ${id.slice(0, 6)}`),
       kwh: num(r.total_kwh, r.kwh, r.consumption_kwh),
-      cost: num(r.estimated_amount, r.cost_estimate_soles, r.cost_soles, r.cost),
+      cost: num(r.cost_estimate_soles, r.cost_soles, r.cost),
     };
   });
 }
