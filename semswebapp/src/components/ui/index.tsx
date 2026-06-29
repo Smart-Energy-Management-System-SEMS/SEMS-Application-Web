@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
+import { useLang } from "../../context/LanguageContext";
 
 /* ---------- Card ---------- */
 export function Card({
@@ -76,20 +77,22 @@ export function Badge({
 }
 
 /* ---------- Spinner / Loading ---------- */
-export function Loading({ label = "Cargando..." }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const { t } = useLang();
   return (
     <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400">
       <Loader2 className="h-5 w-5 animate-spin" />
-      {label}
+      {label ?? t("Cargando...", "Loading...")}
     </div>
   );
 }
 
 /* ---------- Empty / Error ---------- */
 export function ErrorState({ message }: { message?: string }) {
+  const { t } = useLang();
   return (
     <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-center text-sm text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-      {message ?? "No se pudo cargar la información. Revisa tu conexión con el API Gateway."}
+      {message ?? t("No se pudo cargar la información. Revisa tu conexión con el API Gateway.", "Could not load the data. Check your connection to the API Gateway.")}
     </div>
   );
 }

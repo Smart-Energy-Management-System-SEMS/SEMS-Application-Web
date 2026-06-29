@@ -7,25 +7,28 @@ import { getReadings, getDeviceConsumption } from "../services/energy.service";
 import { getRecommendations, getAnomalies } from "../services/analytics.service";
 import { soles, kwh as fmtKwh, pct } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
+import { useLang } from "../context/LanguageContext";
 
 const deviceColors = ["#2563eb", "#0ea5e9", "#6366f1", "#f59e0b", "#10b981", "#94a3b8"];
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { t } = useLang();
   const summary = useQuery({ queryKey: ["summary", user?.id], queryFn: () => getDashboardSummary(user!.id), enabled: !!user });
   const readings = useQuery({ queryKey: ["readings", user?.id, 14], queryFn: () => getReadings(user!.id, 14), enabled: !!user });
   const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
   const recs = useQuery({ queryKey: ["recommendations", user?.id], queryFn: () => getRecommendations(user!.id), enabled: !!user });
-const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => getAnomalies(user!.id), enabled: !!user });
+  const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => getAnomalies(user!.id), enabled: !!user });
+
   const s = summary.data;
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">
-          Hola, {user?.fullName?.split(" ")[0] ?? "👋"}
+          {t("Hola", "Hi")}, {user?.fullName?.split(" ")[0] ?? "👋"}
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Este es el resumen energético de tu hogar.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t("Este es el resumen energético de tu hogar.", "This is your home's energy overview.")}</p>
       </div>
 
       {/* KPIs */}
@@ -38,30 +41,30 @@ const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => g
           <Kpi
             icon={<TrendingDown className="h-5 w-5" />}
             tone="green"
-            label="Ahorro este mes"
+            label={t("Ahorro este mes", "Savings this month")}
             value={soles(s.savingAmount)}
-            hint={`${pct(s.savingPct)} vs. tu promedio`}
+            hint={`${pct(s.savingPct)} ${t("vs. tu promedio", "vs. your average")}`}
           />
           <Kpi
             icon={<Receipt className="h-5 w-5" />}
             tone="blue"
-            label="Gasto actual"
+            label={t("Gasto actual", "Current spend")}
             value={soles(s.currentMonthCost)}
-            hint={`Proyección: ${soles(s.projectedCost)}`}
+            hint={`${t("Proyección", "Forecast")}: ${soles(s.projectedCost)}`}
           />
           <Kpi
             icon={<Zap className="h-5 w-5" />}
             tone="amber"
-            label="Consumo total"
+            label={t("Consumo total", "Total usage")}
             value={fmtKwh(s.totalKwh)}
-            hint="Mes en curso"
+            hint={t("Mes en curso", "Current month")}
           />
           <Kpi
             icon={<Cpu className="h-5 w-5" />}
             tone="slate"
-            label="Dispositivos activos"
+            label={t("Dispositivos activos", "Active devices")}
             value={String(s.activeDevices)}
-            hint={`${s.unreadAlerts} alertas sin leer`}
+            hint={`${s.unreadAlerts} ${t("alertas sin leer", "unread alerts")}`}
           />
         </div>
       )}
@@ -69,7 +72,7 @@ const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => g
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Gráfico */}
         <Card className="lg:col-span-2">
-          <CardTitle action={<Badge color="blue">Últimos 14 días</Badge>}>Consumo diario</CardTitle>
+          <CardTitle action={<Badge color="blue">{t("Últimos 14 días", "Last 14 days")}</Badge>}>{t("Consumo diario", "Daily usage")}</CardTitle>
           {readings.isLoading ? (
             <Loading />
           ) : readings.isError || !readings.data ? (
@@ -81,7 +84,7 @@ const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => g
 
         {/* Consumo por dispositivo */}
         <Card>
-          <CardTitle>Por dispositivo</CardTitle>
+          <CardTitle>{t("Por dispositivo", "By device")}</CardTitle>
           {consumption.isLoading ? (
             <Loading />
           ) : consumption.isError || !consumption.data ? (
@@ -113,7 +116,7 @@ const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => g
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recomendaciones */}
         <Card>
-          <CardTitle action={<Badge color="green">Ahorro potencial</Badge>}>Recomendaciones</CardTitle>
+          <CardTitle action={<Badge color="green">{t("Ahorro potencial", "Potential savings")}</Badge>}>{t("Recomendaciones", "Recommendations")}</CardTitle>
           {recs.isLoading ? (
             <Loading />
           ) : recs.isError || !recs.data ? (
@@ -129,7 +132,7 @@ const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => g
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">{r.title}</p>
                       <span className="shrink-0 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                        +{soles(r.estimatedSaving)}/mes
+                        +{soles(r.estimatedSaving)}/{t("mes", "mo")}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs leading-snug text-slate-500 dark:text-slate-400">{r.detail}</p>
@@ -142,8 +145,8 @@ const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => g
 
         {/* Anomalías */}
         <Card>
-          <CardTitle action={<a href="/analytics" className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">Ver todo</a>}>
-            Anomalías recientes
+          <CardTitle action={<a href="/analytics" className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">{t("Ver todo", "View all")}</a>}>
+            {t("Anomalías recientes", "Recent anomalies")}
           </CardTitle>
           {anomalies.isLoading ? (
             <Loading />
@@ -207,10 +210,11 @@ function Kpi({
 }
 
 export function SeverityBadge({ severity }: { severity: "LOW" | "MEDIUM" | "HIGH" }) {
+  const { t } = useLang();
   const map = {
-    LOW: { color: "slate" as const, label: "Baja" },
-    MEDIUM: { color: "amber" as const, label: "Media" },
-    HIGH: { color: "rose" as const, label: "Alta" },
+    LOW: { color: "slate" as const, label: t("Baja", "Low") },
+    MEDIUM: { color: "amber" as const, label: t("Media", "Medium") },
+    HIGH: { color: "rose" as const, label: t("Alta", "High") },
   };
   return <Badge color={map[severity].color}>{map[severity].label}</Badge>;
 }

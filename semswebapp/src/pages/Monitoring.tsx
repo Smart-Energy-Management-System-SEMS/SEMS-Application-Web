@@ -4,11 +4,13 @@ import { Gauge, Zap, Receipt } from "lucide-react";
 import { Card, CardTitle, Loading, ErrorState, Badge } from "../components/ui";
 import ConsumptionChart from "../components/charts/ConsumptionChart";
 import { getReadings, getDeviceConsumption, getMeters } from "../services/energy.service";
-import { soles, kwh as fmtKwh } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
+import { useLang } from "../context/LanguageContext";
+import { soles, kwh as fmtKwh } from "../lib/format";
 
 export default function Monitoring() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [metric, setMetric] = useState<"kwh" | "cost">("kwh");
   const [days, setDays] = useState(14);
 
@@ -16,11 +18,14 @@ export default function Monitoring() {
   const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
   const meters = useQuery({ queryKey: ["meters", user?.id], queryFn: () => getMeters(user!.id), enabled: !!user });
 
+  const totalKwh = readings.data?.reduce((s, r) => s + r.kwh, 0) ?? 0;
+  const totalCost = readings.data?.reduce((s, r) => s + r.cost, 0) ?? 0;
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">Monitoreo</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Consumo de tu hogar en tiempo real.</p>
+        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">{t("Monitoreo", "Monitoring")}</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t("Consumo de tu hogar en tiempo real.", "Your home's energy usage in real time.")}</p>
       </div>
 
       {/* Medidores */}
@@ -32,12 +37,12 @@ export default function Monitoring() {
             </span>
             <div>
               <p className="font-semibold text-slate-900 dark:text-white">{m.name}</p>
-              <p className="text-xs text-slate-400">Lectura acumulada: {fmtKwh(m.lastReadingKwh)}</p>
+              <p className="text-xs text-slate-400">{t("Lectura acumulada", "Total reading")}: {fmtKwh(m.lastReadingKwh)}</p>
             </div>
           </div>
           <Badge color={m.active ? "green" : "slate"}>
             <span className={`h-1.5 w-1.5 rounded-full ${m.active ? "bg-emerald-500 animate-pulse-soft" : "bg-slate-400"}`} />
-            {m.active ? "En línea" : "Desconectado"}
+            {m.active ? t("En línea", "Online") : t("Desconectado", "Offline")}
           </Badge>
         </Card>
       ))}
@@ -48,7 +53,8 @@ export default function Monitoring() {
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300"><Zap className="h-5 w-5" /></span>
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Consumo ({days} días)</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t("Consumo", "Usage")} ({days} {t("días", "days")})</p>
+              <p className="font-display text-xl font-extrabold text-slate-900 dark:text-white">{fmtKwh(+totalKwh.toFixed(1))}</p>
             </div>
           </div>
         </Card>
@@ -56,7 +62,8 @@ export default function Monitoring() {
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><Receipt className="h-5 w-5" /></span>
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Costo ({days} días)</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t("Costo", "Cost")} ({days} {t("días", "days")})</p>
+              <p className="font-display text-xl font-extrabold text-slate-900 dark:text-white">{soles(+totalCost.toFixed(2))}</p>
             </div>
           </div>
         </Card>
@@ -67,12 +74,12 @@ export default function Monitoring() {
         <CardTitle
           action={
             <div className="flex items-center gap-2">
-              <Segmented value={metric} onChange={(v) => setMetric(v as "kwh" | "cost")} options={[["kwh", "kWh"], ["cost", "Costo"]]} />
+              <Segmented value={metric} onChange={(v) => setMetric(v as "kwh" | "cost")} options={[["kwh", "kWh"], ["cost", t("Costo", "Cost")]]} />
               <Segmented value={String(days)} onChange={(v) => setDays(+v)} options={[["7", "7d"], ["14", "14d"], ["30", "30d"]]} />
             </div>
           }
         >
-          Tendencia de consumo
+          {t("Tendencia de consumo", "Usage trend")}
         </CardTitle>
         {readings.isLoading ? (
           <Loading />
@@ -85,7 +92,7 @@ export default function Monitoring() {
 
       {/* Detalle por dispositivo */}
       <Card>
-        <CardTitle>Detalle por dispositivo</CardTitle>
+        <CardTitle>{t("Detalle por dispositivo", "Device breakdown")}</CardTitle>
         {consumption.isLoading ? (
           <Loading />
         ) : consumption.isError || !consumption.data ? (
@@ -95,10 +102,10 @@ export default function Monitoring() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wider text-slate-400 dark:border-navy-800">
-                  <th className="pb-2 font-semibold">Dispositivo</th>
-                  <th className="pb-2 text-right font-semibold">Consumo</th>
-                  <th className="pb-2 text-right font-semibold">Costo</th>
-                  <th className="pb-2 text-right font-semibold">% del total</th>
+                  <th className="pb-2 font-semibold">{t("Dispositivo", "Device")}</th>
+                  <th className="pb-2 text-right font-semibold">{t("Consumo", "Usage")}</th>
+                  <th className="pb-2 text-right font-semibold">{t("Costo", "Cost")}</th>
+                  <th className="pb-2 text-right font-semibold">{t("% del total", "% of total")}</th>
                 </tr>
               </thead>
               <tbody>

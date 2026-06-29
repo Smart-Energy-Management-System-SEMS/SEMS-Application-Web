@@ -2,15 +2,18 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Zap, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useLang } from "../context/LanguageContext";
 import { DEMO_MODE } from "../lib/api";
-import GoogleSignInButton from "../components/GooglesSigninButton";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 
 export default function Login() {
   const { login, loginWithGoogle, loading } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
   const [email, setEmail] = useState(DEMO_MODE ? "demo@energix.pe" : "");
   const [password, setPassword] = useState(DEMO_MODE ? "demo1234" : "");
   const [error, setError] = useState("");
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -18,22 +21,24 @@ export default function Login() {
       await login(email, password);
       navigate("/");
     } catch {
-      setError("No se pudo iniciar sesión. Verifica tus credenciales.");
+      setError(t("No se pudo iniciar sesión. Verifica tus credenciales.", "Could not sign in. Check your credentials."));
     }
   };
+
   const onGoogle = async (idToken: string) => {
     setError("");
     try {
       await loginWithGoogle(idToken);
       navigate("/");
     } catch {
-      setError("No se pudo iniciar sesión con Google.");
+      setError(t("No se pudo iniciar sesión con Google.", "Could not sign in with Google."));
     }
   };
+
   return (
-    <AuthShell title="Bienvenido de nuevo" subtitle="Ingresa para ver el consumo de tu hogar.">
+    <AuthShell title={t("Bienvenido de nuevo", "Welcome back")} subtitle={t("Ingresa para ver el consumo de tu hogar.", "Sign in to see your home's energy usage.")}>
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="Correo electrónico">
+        <Field label={t("Correo electrónico", "Email")}>
           <input
             type="email"
             required
@@ -43,7 +48,7 @@ export default function Login() {
             className={inputCls}
           />
         </Field>
-        <Field label="Contraseña">
+        <Field label={t("Contraseña", "Password")}>
           <input
             type="password"
             required
@@ -62,27 +67,27 @@ export default function Login() {
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-60"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          Iniciar sesión
+          {t("Iniciar sesión", "Sign in")}
         </button>
 
         <div className="relative py-1 text-center">
-          <span className="relative z-10 bg-white px-3 text-xs text-slate-400 dark:bg-navy-900">o continúa con</span>
+          <span className="relative z-10 bg-white px-3 text-xs text-slate-400 dark:bg-navy-900">{t("o continúa con", "or continue with")}</span>
           <div className="absolute inset-x-0 top-1/2 h-px bg-slate-200 dark:bg-navy-800" />
         </div>
 
-         <GoogleSignInButton onCredential={onGoogle} />
+        <GoogleSignInButton onCredential={onGoogle} />
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-        ¿No tienes cuenta?{" "}
+        {t("¿No tienes cuenta?", "Don't have an account?")}{" "}
         <Link to="/register" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
-          Regístrate gratis
+          {t("Regístrate gratis", "Sign up free")}
         </Link>
       </p>
 
       {DEMO_MODE && (
         <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-          Modo demo activo: ingresa con cualquier correo y contraseña.
+          {t("Modo demo activo: ingresa con cualquier correo y contraseña.", "Demo mode: sign in with any email and password.")}
         </p>
       )}
     </AuthShell>
@@ -111,6 +116,7 @@ export function AuthShell({
   subtitle: string;
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Panel de marca */}
@@ -123,13 +129,13 @@ export function AuthShell({
         </div>
         <div>
           <h2 className="font-display text-4xl font-extrabold leading-tight">
-            Controla tu energía.<br />Reduce tu factura.
+            {t("Controla tu energía.", "Take control of your energy.")}<br />{t("Reduce tu factura.", "Lower your bill.")}
           </h2>
           <p className="mt-4 max-w-md text-blue-100/90">
-            Monitorea el consumo de tu hogar en tiempo real, recibe alertas y ahorra hasta un 30% en tu recibo de luz.
+            {t("Monitorea el consumo de tu hogar en tiempo real, recibe alertas y ahorra hasta un 30% en tu recibo de luz.", "Monitor your home's usage in real time, get alerts and save up to 30% on your electricity bill.")}
           </p>
         </div>
-        <p className="text-sm text-blue-100/70">Un producto de Energix · Lima, Perú</p>
+        <p className="text-sm text-blue-100/70">{t("Un producto de Energix · Lima, Perú", "An Energix product · Lima, Peru")}</p>
       </div>
 
       {/* Formulario */}
@@ -146,16 +152,5 @@ export function AuthShell({
         </div>
       </div>
     </div>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24">
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z" />
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
-      <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z" />
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38Z" />
-    </svg>
   );
 }

@@ -2,19 +2,21 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
-
-const titles: Record<string, string> = {
-  "/": "Resumen",
-  "/devices": "Dispositivos",
-  "/monitoring": "Monitoreo",
-  "/analytics": "Analítica",
-  "/alerts": "Alertas",
-  "/subscription": "Suscripción y pagos",
-};
+import { useLang } from "../context/LanguageContext";
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const { t } = useLang();
+
+  const titles: Record<string, string> = {
+    "/": t("Resumen", "Overview"),
+    "/devices": t("Dispositivos", "Devices"),
+    "/monitoring": t("Monitoreo", "Monitoring"),
+    "/analytics": t("Analítica", "Analytics"),
+    "/alerts": t("Alertas", "Alerts"),
+    "/subscription": t("Suscripción y pagos", "Subscription & payments"),
+  };
   const title = titles[pathname] ?? "SEMS";
 
   return (

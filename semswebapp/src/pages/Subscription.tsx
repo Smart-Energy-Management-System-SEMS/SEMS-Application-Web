@@ -13,28 +13,42 @@ import {
 } from "../services/subscriptions.service";
 import { soles } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
+import { useLang } from "../context/LanguageContext";
 import { STRIPE_ENABLED } from "../lib/stripe";
 import AddCardModal from "../components/AddCardModal";
 import type { SubscriptionStatus, SubscriptionPlan } from "../types/billing";
 
-const subStatus: Record<SubscriptionStatus, { color: "green" | "blue" | "rose" | "amber" | "slate"; label: string }> = {
-  ACTIVE: { color: "green", label: "Activa" },
-  TRIAL: { color: "blue", label: "Prueba gratis" },
-  CANCELED: { color: "slate", label: "Cancelada" },
-  PAST_DUE: { color: "rose", label: "Pago pendiente" },
+const subColor: Record<SubscriptionStatus, "green" | "blue" | "rose" | "amber" | "slate"> = {
+  ACTIVE: "green",
+  TRIAL: "blue",
+  CANCELED: "slate",
+  PAST_DUE: "rose",
 };
 
-const invStatus = {
-  PAID: { color: "green" as const, label: "Pagada" },
-  PENDING: { color: "amber" as const, label: "Pendiente" },
-  FAILED: { color: "rose" as const, label: "Fallida" },
+const invColor = {
+  PAID: "green" as const,
+  PENDING: "amber" as const,
+  FAILED: "rose" as const,
 };
 
 export default function Subscription() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { t } = useLang();
   const [addOpen, setAddOpen] = useState(false);
   const [payError, setPayError] = useState("");
+
+  const subLabel: Record<SubscriptionStatus, string> = {
+    ACTIVE: t("Activa", "Active"),
+    TRIAL: t("Prueba gratis", "Free trial"),
+    CANCELED: t("Cancelada", "Canceled"),
+    PAST_DUE: t("Pago pendiente", "Past due"),
+  };
+  const invLabel = {
+    PAID: t("Pagada", "Paid"),
+    PENDING: t("Pendiente", "Pending"),
+    FAILED: t("Fallida", "Failed"),
+  };
 
   const sub = useQuery({ queryKey: ["subscription", user?.id], queryFn: () => getMySubscription(user!.id), enabled: !!user });
   const plans = useQuery({ queryKey: ["plans"], queryFn: getPlans });
@@ -43,7 +57,6 @@ export default function Subscription() {
 
   const defaultMethod = methods.data?.find((m) => m.primary) ?? methods.data?.[0];
 
-  // Elegir plan: si es de pago, cobra con la tarjeta por defecto y luego cambia el plan.
   const choose = useMutation({
     mutationFn: async (plan: SubscriptionPlan) => {
       if (plan.price > 0) {
@@ -55,8 +68,6 @@ export default function Subscription() {
           subscriptionId: sub.data?.id,
         });
       }
-      // El cambio de plan es best-effort: si falla (p. ej. price id inexistente
-      // en una cuenta Stripe nueva), el pago ya quedó registrado igualmente.
       try {
         await changePlan({ planId: plan.id, subscriptionId: sub.data?.id, userId: user!.id });
       } catch {
@@ -71,8 +82,8 @@ export default function Subscription() {
     onError: (e: unknown) =>
       setPayError(
         (e as Error)?.message === "NO_CARD"
-          ? "Agrega una tarjeta antes de elegir un plan de pago."
-          : "No se pudo completar el pago. Inténtalo de nuevo."
+          ? t("Agrega una tarjeta antes de elegir un plan de pago.", "Add a card before choosing a paid plan.")
+          : t("No se pudo completar el pago. Inténtalo de nuevo.", "Could not complete the payment. Please try again.")
       ),
   });
 
@@ -84,37 +95,37 @@ export default function Subscription() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">Suscripción y pagos</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Gestiona tu plan, métodos de pago y facturas.</p>
+        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">{t("Suscripción y pagos", "Subscription & payments")}</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t("Gestiona tu plan, métodos de pago y facturas.", "Manage your plan, payment methods and invoices.")}</p>
       </div>
 
       {/* Suscripción actual */}
       <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white dark:from-blue-600 dark:to-blue-800">
         {sub.isLoading ? (
-          <div className="py-6 text-center text-blue-100">Cargando...</div>
+          <div className="py-6 text-center text-blue-100">{t("Cargando...", "Loading...")}</div>
         ) : sub.data ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-blue-100/90">Tu plan actual</p>
+              <p className="text-sm text-blue-100/90">{t("Tu plan actual", "Your current plan")}</p>
               <div className="mt-1 flex items-center gap-3">
                 <p className="font-display text-3xl font-extrabold">{sub.data.planName}</p>
                 <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold">
-                  {subStatus[sub.data.status].label}
+                  {subLabel[sub.data.status]}
                 </span>
               </div>
               <p className="mt-1 text-sm text-blue-100/80">
-                {soles(sub.data.price)} / {sub.data.period} · se renueva el {sub.data.renewalDate}
+                {soles(sub.data.price)} / {sub.data.period} · {t("se renueva el", "renews on")} {sub.data.renewalDate}
               </p>
             </div>
           </div>
         ) : (
-          <p className="py-6 text-center text-blue-100">No tienes una suscripción activa.</p>
+          <p className="py-6 text-center text-blue-100">{t("No tienes una suscripción activa.", "You have no active subscription.")}</p>
         )}
       </Card>
 
       {/* Planes */}
       <div>
-        <h3 className="mb-4 font-display text-lg font-bold text-slate-900 dark:text-white">Cambia de plan</h3>
+        <h3 className="mb-4 font-display text-lg font-bold text-slate-900 dark:text-white">{t("Cambia de plan", "Change plan")}</h3>
         {payError && (
           <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
             {payError}
@@ -140,7 +151,7 @@ export default function Subscription() {
                 >
                   {plan.recommended && (
                     <span className="absolute -top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-                      <Star className="h-3 w-3" fill="white" /> Recomendado
+                      <Star className="h-3 w-3" fill="white" /> {t("Recomendado", "Recommended")}
                     </span>
                   )}
                   <h4 className="font-display text-lg font-bold text-slate-900 dark:text-white">{plan.name}</h4>
@@ -159,7 +170,7 @@ export default function Subscription() {
                   <div className="mt-6">
                     {current ? (
                       <Button variant="outline" className="w-full" disabled>
-                        Plan actual
+                        {t("Plan actual", "Current plan")}
                       </Button>
                     ) : (
                       <Button
@@ -169,7 +180,7 @@ export default function Subscription() {
                         disabled={choose.isPending}
                       >
                         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                        {plan.price > 0 ? `Pagar ${soles(plan.price)}` : `Elegir ${plan.name}`}
+                        {plan.price > 0 ? `${t("Pagar", "Pay")} ${soles(plan.price)}` : `${t("Elegir", "Choose")} ${plan.name}`}
                       </Button>
                     )}
                   </div>
@@ -187,12 +198,12 @@ export default function Subscription() {
             action={
               STRIPE_ENABLED ? (
                 <Button variant="ghost" className="!py-1 !text-xs" onClick={() => setAddOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Agregar
+                  <Plus className="h-3.5 w-3.5" /> {t("Agregar", "Add")}
                 </Button>
               ) : undefined
             }
           >
-            Métodos de pago
+            {t("Métodos de pago", "Payment methods")}
           </CardTitle>
           {methods.isLoading ? (
             <Loading />
@@ -200,7 +211,9 @@ export default function Subscription() {
             <ErrorState />
           ) : methods.data.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-400">
-              {STRIPE_ENABLED ? 'Aún no tienes tarjetas. Agrega una con "Agregar".' : "No hay métodos de pago."}
+              {STRIPE_ENABLED
+                ? t('Aún no tienes tarjetas. Agrega una con "Agregar".', 'No cards yet. Add one with "Add".')
+                : t("No hay métodos de pago.", "No payment methods.")}
             </p>
           ) : (
             <ul className="space-y-3">
@@ -213,14 +226,14 @@ export default function Subscription() {
                     <p className="text-sm font-medium text-slate-900 dark:text-white">
                       {m.brand} •••• {m.last4}
                     </p>
-                    <p className="text-xs text-slate-400">Vence {String(m.expMonth).padStart(2, "0")}/{m.expYear}</p>
+                    <p className="text-xs text-slate-400">{t("Vence", "Expires")} {String(m.expMonth).padStart(2, "0")}/{m.expYear}</p>
                   </div>
-                  {m.primary && <Badge color="blue">Principal</Badge>}
+                  {m.primary && <Badge color="blue">{t("Principal", "Default")}</Badge>}
                   <button
                     onClick={() => removeCard.mutate(m.id)}
                     disabled={removeCard.isPending}
                     className="text-slate-300 transition-colors hover:text-rose-500 disabled:opacity-50 dark:text-navy-700 dark:hover:text-rose-400"
-                    aria-label="Eliminar tarjeta"
+                    aria-label={t("Eliminar tarjeta", "Delete card")}
                   >
                     {removeCard.isPending && removeCard.variables === m.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -236,13 +249,13 @@ export default function Subscription() {
 
         {/* Facturas */}
         <Card>
-          <CardTitle>Historial de facturas</CardTitle>
+          <CardTitle>{t("Historial de facturas", "Invoice history")}</CardTitle>
           {invoices.isLoading ? (
             <Loading />
           ) : invoices.isError || !invoices.data ? (
             <ErrorState />
           ) : invoices.data.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-400">Aún no tienes pagos registrados.</p>
+            <p className="py-6 text-center text-sm text-slate-400">{t("Aún no tienes pagos registrados.", "No payments yet.")}</p>
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-navy-800">
               {invoices.data.map((inv) => (
@@ -252,8 +265,8 @@ export default function Subscription() {
                     <p className="text-xs text-slate-400">{inv.date} · {inv.id.slice(0, 8)}</p>
                   </div>
                   <span className="text-sm font-semibold text-slate-900 dark:text-white">{soles(inv.amount)}</span>
-                  <Badge color={invStatus[inv.status].color}>{invStatus[inv.status].label}</Badge>
-                  <button className="text-slate-400 transition-colors hover:text-blue-600" aria-label="Descargar">
+                  <Badge color={invColor[inv.status]}>{invLabel[inv.status]}</Badge>
+                  <button className="text-slate-400 transition-colors hover:text-blue-600" aria-label={t("Descargar", "Download")}>
                     <Download className="h-4 w-4" />
                   </button>
                 </li>

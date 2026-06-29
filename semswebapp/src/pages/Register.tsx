@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useLang } from "../context/LanguageContext";
 import { AuthShell, Field, inputCls } from "./Login";
 
 export default function Register() {
   const { register, loading } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -19,24 +21,24 @@ export default function Register() {
       await register(fullName, email, password);
       navigate("/");
     } catch {
-      setError("No se pudo crear la cuenta. Intenta nuevamente.");
+      setError(t("No se pudo crear la cuenta. Intenta nuevamente.", "Could not create the account. Please try again."));
     }
   };
 
   return (
-    <AuthShell title="Crea tu cuenta" subtitle="Empieza tu prueba gratis de 30 días.">
+    <AuthShell title={t("Crea tu cuenta", "Create your account")} subtitle={t("Empieza tu prueba gratis de 30 días.", "Start your 30-day free trial.")}>
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="Nombre completo">
+        <Field label={t("Nombre completo", "Full name")}>
           <input
             type="text"
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="Tu nombre"
+            placeholder={t("Tu nombre", "Your name")}
             className={inputCls}
           />
         </Field>
-        <Field label="Correo electrónico">
+        <Field label={t("Correo electrónico", "Email")}>
           <input
             type="email"
             required
@@ -46,14 +48,14 @@ export default function Register() {
             className={inputCls}
           />
         </Field>
-        <Field label="Contraseña">
+        <Field label={t("Contraseña", "Password")}>
           <input
             type="password"
             required
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mínimo 6 caracteres"
+            placeholder={t("Mínimo 6 caracteres", "At least 6 characters")}
             className={inputCls}
           />
         </Field>
@@ -66,14 +68,14 @@ export default function Register() {
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-60"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          Crear cuenta gratis
+          {t("Crear cuenta gratis", "Create free account")}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-        ¿Ya tienes cuenta?{" "}
+        {t("¿Ya tienes cuenta?", "Already have an account?")}{" "}
         <Link to="/login" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
-          Inicia sesión
+          {t("Inicia sesión", "Sign in")}
         </Link>
       </p>
     </AuthShell>

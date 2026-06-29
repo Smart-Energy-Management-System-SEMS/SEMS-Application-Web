@@ -11,51 +11,60 @@ import {
   updateNotificationPreference,
 } from "../services/alerts.service";
 import { kwh as fmtKwh } from "../lib/format";
-import type { AlertStatus, NotificationPreference } from "../types/alerts";
 import { useAuth } from "../context/AuthContext";
-const tabs: { key: AlertStatus | "ALL"; label: string }[] = [
-  { key: "ALL", label: "Todas" },
-  { key: "ACTIVE", label: "Activas" },
-  { key: "ACKNOWLEDGED", label: "Vistas" },
-  { key: "RESOLVED", label: "Resueltas" },
-];
+import { useLang } from "../context/LanguageContext";
+import type { AlertStatus, NotificationPreference } from "../types/alerts";
 
-const statusBadge: Record<AlertStatus, { color: "rose" | "amber" | "green"; label: string }> = {
-  ACTIVE: { color: "rose", label: "Activa" },
-  ACKNOWLEDGED: { color: "amber", label: "Vista" },
-  RESOLVED: { color: "green", label: "Resuelta" },
-};
-
-const typeLabel: Record<string, string> = {
-  THRESHOLD: "Umbral",
-  ANOMALY: "Anomalía",
-  INACTIVITY: "Inactividad",
+const statusColor: Record<AlertStatus, "rose" | "amber" | "green"> = {
+  ACTIVE: "rose",
+  ACKNOWLEDGED: "amber",
+  RESOLVED: "green",
 };
 
 export default function Alerts() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { t } = useLang();
   const [tab, setTab] = useState<AlertStatus | "ALL">("ALL");
 
-   const alerts = useQuery({ queryKey: ["alerts", user?.id], queryFn: () => getAlerts(user!.id), enabled: !!user });
+  const tabs: { key: AlertStatus | "ALL"; label: string }[] = [
+    { key: "ALL", label: t("Todas", "All") },
+    { key: "ACTIVE", label: t("Activas", "Active") },
+    { key: "ACKNOWLEDGED", label: t("Vistas", "Seen") },
+    { key: "RESOLVED", label: t("Resueltas", "Resolved") },
+  ];
+  const statusLabel: Record<AlertStatus, string> = {
+    ACTIVE: t("Activa", "Active"),
+    ACKNOWLEDGED: t("Vista", "Seen"),
+    RESOLVED: t("Resuelta", "Resolved"),
+  };
+  const typeLabel: Record<string, string> = {
+    THRESHOLD: t("Umbral", "Threshold"),
+    ANOMALY: t("Anomalía", "Anomaly"),
+    INACTIVITY: t("Inactividad", "Inactivity"),
+  };
+
+  const alerts = useQuery({ queryKey: ["alerts", user?.id], queryFn: () => getAlerts(user!.id), enabled: !!user });
   const thresholds = useQuery({ queryKey: ["thresholds", user?.id], queryFn: () => getThresholds(user!.id), enabled: !!user });
   const prefs = useQuery({ queryKey: ["preferences", user?.id], queryFn: () => getNotificationPreferences(user!.id), enabled: !!user });
+
   const resolve = useMutation({
     mutationFn: (id: string) => updateAlertStatus(id, "RESOLVED"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
-    const togglePref = useMutation({
+  const togglePref = useMutation({
     mutationFn: (p: NotificationPreference) => updateNotificationPreference(user!.id, p.channel, !p.enabled),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["preferences"] }),
   });
+
   const filtered = (alerts.data ?? []).filter((a) => tab === "ALL" || a.status === tab);
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">Alertas</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Avisos, umbrales y preferencias de notificación.</p>
+        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">{t("Alertas", "Alerts")}</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t("Avisos, umbrales y preferencias de notificación.", "Alerts, thresholds and notification preferences.")}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -64,23 +73,23 @@ export default function Alerts() {
           <CardTitle
             action={
               <div className="inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-navy-800">
-                {tabs.map((t) => (
+                {tabs.map((tabItem) => (
                   <button
-                    key={t.key}
-                    onClick={() => setTab(t.key)}
+                    key={tabItem.key}
+                    onClick={() => setTab(tabItem.key)}
                     className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                      tab === t.key
+                      tab === tabItem.key
                         ? "bg-blue-600 text-white"
                         : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                     }`}
                   >
-                    {t.label}
+                    {tabItem.label}
                   </button>
                 ))}
               </div>
             }
           >
-            Bandeja de alertas
+            {t("Bandeja de alertas", "Alerts inbox")}
           </CardTitle>
 
           {alerts.isLoading ? (
@@ -88,7 +97,7 @@ export default function Alerts() {
           ) : alerts.isError ? (
             <ErrorState />
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-slate-400">No hay alertas en esta categoría.</div>
+            <div className="py-12 text-center text-sm text-slate-400">{t("No hay alertas en esta categoría.", "No alerts in this category.")}</div>
           ) : (
             <ul className="space-y-3">
               {filtered.map((a) => (
@@ -98,13 +107,14 @@ export default function Alerts() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-<span className="text-[11px] text-slate-400">{a.deviceName ? `${a.deviceName} · ` : ""}{a.createdAt}</span>                      <Badge color="slate">{typeLabel[a.type]}</Badge>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{a.title}</p>
+                      <Badge color="slate">{typeLabel[a.type]}</Badge>
                       <SeverityBadge severity={a.severity} />
-                      <Badge color={statusBadge[a.status].color}>{statusBadge[a.status].label}</Badge>
+                      <Badge color={statusColor[a.status]}>{statusLabel[a.status]}</Badge>
                     </div>
                     <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">{a.message}</p>
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400">{a.createdAt}</span>
+                      <span className="text-[11px] text-slate-400">{a.deviceName ? `${a.deviceName} · ` : ""}{a.createdAt}</span>
                       {a.status !== "RESOLVED" && (
                         <Button variant="ghost" className="!py-1 !text-xs" onClick={() => resolve.mutate(a.id)} disabled={resolve.isPending}>
                           {resolve.isPending && resolve.variables === a.id ? (
@@ -112,7 +122,7 @@ export default function Alerts() {
                           ) : (
                             <Check className="h-3.5 w-3.5" />
                           )}
-                          Resolver
+                          {t("Resolver", "Resolve")}
                         </Button>
                       )}
                     </div>
@@ -127,23 +137,23 @@ export default function Alerts() {
         <div className="space-y-6">
           {/* Umbrales */}
           <Card>
-            <CardTitle action={<SlidersHorizontal className="h-4 w-4 text-slate-400" />}>Umbrales</CardTitle>
+            <CardTitle action={<SlidersHorizontal className="h-4 w-4 text-slate-400" />}>{t("Umbrales", "Thresholds")}</CardTitle>
             {thresholds.isLoading ? (
               <Loading />
             ) : thresholds.isError ? (
               <ErrorState />
             ) : (
               <ul className="space-y-3">
-                {thresholds.data!.map((t) => (
-                  <li key={t.id} className="flex items-center gap-3">
+                {thresholds.data!.map((th) => (
+                  <li key={th.id} className="flex items-center gap-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400">
                       <Gauge className="h-4 w-4" />
                     </span>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">{t.deviceName}</p>
-                      <p className="text-xs text-slate-400">Máx. {fmtKwh(t.maxKwhPerDay)}/día</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{th.deviceName}</p>
+                      <p className="text-xs text-slate-400">{t("Máx.", "Max")} {fmtKwh(th.maxKwhPerDay)}/{t("día", "day")}</p>
                     </div>
-                    <Badge color={t.enabled ? "green" : "slate"}>{t.enabled ? "Activo" : "Off"}</Badge>
+                    <Badge color={th.enabled ? "green" : "slate"}>{th.enabled ? t("Activo", "On") : "Off"}</Badge>
                   </li>
                 ))}
               </ul>
@@ -152,7 +162,7 @@ export default function Alerts() {
 
           {/* Preferencias */}
           <Card>
-            <CardTitle>Notificaciones</CardTitle>
+            <CardTitle>{t("Notificaciones", "Notifications")}</CardTitle>
             {prefs.isLoading ? (
               <Loading />
             ) : prefs.isError ? (

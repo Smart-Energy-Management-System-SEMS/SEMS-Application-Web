@@ -12,17 +12,18 @@ import {
 } from "lucide-react";
 import { getMySubscription } from "../services/subscriptions.service";
 import { useAuth } from "../context/AuthContext";
-
-const nav = [
-  { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
-  { to: "/devices", label: "Dispositivos", icon: Cpu },
-  { to: "/monitoring", label: "Monitoreo", icon: Activity },
-  { to: "/analytics", label: "Analítica", icon: LineChart },
-  { to: "/alerts", label: "Alertas", icon: Bell },
-  { to: "/subscription", label: "Suscripción", icon: CreditCard },
-];
+import { useLang } from "../context/LanguageContext";
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useLang();
+  const nav = [
+    { to: "/", label: t("Resumen", "Overview"), icon: LayoutDashboard, end: true },
+    { to: "/devices", label: t("Dispositivos", "Devices"), icon: Cpu },
+    { to: "/monitoring", label: t("Monitoreo", "Monitoring"), icon: Activity },
+    { to: "/analytics", label: t("Analítica", "Analytics"), icon: LineChart },
+    { to: "/alerts", label: t("Alertas", "Alerts"), icon: Bell },
+    { to: "/subscription", label: t("Suscripción", "Subscription"), icon: CreditCard },
+  ];
   return (
     <>
       {/* Overlay móvil */}
@@ -44,13 +45,13 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
               SEMS
             </span>
           </div>
-          <button className="text-slate-400 lg:hidden" onClick={onClose} aria-label="Cerrar menú">
+          <button className="text-slate-400 lg:hidden" onClick={onClose} aria-label={t("Cerrar menú", "Close menu")}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <nav className="px-3 py-4">
-          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Panel</p>
+          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{t("Panel", "Menu")}</p>
           <ul className="space-y-1">
             {nav.map((item) => (
               <li key={item.to}>
@@ -82,6 +83,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
 
 function PlanCard({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
+  const { t } = useLang();
   const sub = useQuery({
     queryKey: ["subscription", user?.id],
     queryFn: () => getMySubscription(user!.id),
@@ -89,7 +91,6 @@ function PlanCard({ onClose }: { onClose: () => void }) {
   });
 
   const planName = sub.data?.planName;
-  // Plan de pago activo => mostramos el plan; Free o sin plan => invitamos a mejorar.
   const isPaid = !!planName && (sub.data?.price ?? 0) > 0;
 
   return (
@@ -100,13 +101,13 @@ function PlanCard({ onClose }: { onClose: () => void }) {
     >
       {isPaid ? (
         <>
-          <p className="text-sm font-bold">Plan {planName}</p>
-          <p className="mt-1 text-xs text-blue-100/90">Tu plan está activo. Administra tu suscripción.</p>
+          <p className="text-sm font-bold">{t("Plan", "Plan")} {planName}</p>
+          <p className="mt-1 text-xs text-blue-100/90">{t("Tu plan está activo. Administra tu suscripción.", "Your plan is active. Manage your subscription.")}</p>
         </>
       ) : (
         <>
-          <p className="text-sm font-bold">Mejora tu plan</p>
-          <p className="mt-1 text-xs text-blue-100/90">Desbloquea analítica avanzada y proyección de factura.</p>
+          <p className="text-sm font-bold">{t("Mejora tu plan", "Upgrade your plan")}</p>
+          <p className="mt-1 text-xs text-blue-100/90">{t("Desbloquea analítica avanzada y proyección de factura.", "Unlock advanced analytics and bill forecasting.")}</p>
         </>
       )}
     </NavLink>

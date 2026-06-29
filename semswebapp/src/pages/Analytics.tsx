@@ -11,14 +11,17 @@ import {
 } from "../services/analytics.service";
 import { soles, kwh as fmtKwh, pct } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
-export default function Analytics() {
+import { useLang } from "../context/LanguageContext";
 
+export default function Analytics() {
   const qc = useQueryClient();
   const { user } = useAuth();
- const recs = useQuery({ queryKey: ["recommendations", user?.id], queryFn: () => getRecommendations(user!.id), enabled: !!user });
-const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => getAnomalies(user!.id), enabled: !!user });
-const prediction = useQuery({ queryKey: ["billPrediction", user?.id], queryFn: () => getBillPrediction(user!.id), enabled: !!user });
-const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => getRankings(user!.id), enabled: !!user });
+  const { t } = useLang();
+  const recs = useQuery({ queryKey: ["recommendations", user?.id], queryFn: () => getRecommendations(user!.id), enabled: !!user });
+  const anomalies = useQuery({ queryKey: ["anomalies", user?.id], queryFn: () => getAnomalies(user!.id), enabled: !!user });
+  const prediction = useQuery({ queryKey: ["billPrediction", user?.id], queryFn: () => getBillPrediction(user!.id), enabled: !!user });
+  const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => getRankings(user!.id), enabled: !!user });
+
   const apply = useMutation({
     mutationFn: applyRecommendation,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recommendations"] }),
@@ -27,8 +30,8 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">Analítica</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Recomendaciones, anomalías y proyección de tu factura.</p>
+        <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">{t("Analítica", "Analytics")}</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t("Recomendaciones, anomalías y proyección de tu factura.", "Recommendations, anomalies and your bill forecast.")}</p>
       </div>
 
       {/* Proyección de factura */}
@@ -37,7 +40,7 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Receipt className="h-6 w-6" /></span>
             <div>
-              <p className="text-sm text-blue-100/90">Proyección de tu factura</p>
+              <p className="text-sm text-blue-100/90">{t("Proyección de tu factura", "Your bill forecast")}</p>
               {prediction.data ? (
                 <p className="font-display text-3xl font-extrabold">{soles(prediction.data.projectedCost)}</p>
               ) : (
@@ -47,8 +50,8 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
           </div>
           {prediction.data && (
             <div className="text-right text-sm text-blue-100/90">
-              <p>{fmtKwh(prediction.data.projectedKwh)} estimados</p>
-              <p>Confianza {pct(prediction.data.confidence * 100)} · al {prediction.data.closingDate}</p>
+              <p>{fmtKwh(prediction.data.projectedKwh)} {t("estimados", "estimated")}</p>
+              <p>{t("Confianza", "Confidence")} {pct(prediction.data.confidence * 100)} · {t("al", "to")} {prediction.data.closingDate}</p>
             </div>
           )}
         </div>
@@ -57,7 +60,7 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recomendaciones */}
         <Card>
-          <CardTitle>Recomendaciones</CardTitle>
+          <CardTitle>{t("Recomendaciones", "Recommendations")}</CardTitle>
           {recs.isLoading ? (
             <Loading />
           ) : recs.isError || !recs.data ? (
@@ -73,18 +76,18 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-900 dark:text-white">{r.title}</p>
-                        <span className="shrink-0 text-xs font-bold text-emerald-600 dark:text-emerald-400">+{soles(r.estimatedSaving)}/mes</span>
+                        <span className="shrink-0 text-xs font-bold text-emerald-600 dark:text-emerald-400">+{soles(r.estimatedSaving)}/{t("mes", "mo")}</span>
                       </div>
                       <p className="mt-0.5 text-xs leading-snug text-slate-500 dark:text-slate-400">{r.detail}</p>
                       <div className="mt-2.5">
                         {r.applied ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            <Check className="h-3.5 w-3.5" /> Aplicada
+                            <Check className="h-3.5 w-3.5" /> {t("Aplicada", "Applied")}
                           </span>
                         ) : (
                           <Button variant="outline" className="!py-1.5 !text-xs" onClick={() => apply.mutate(r.id)} disabled={apply.isPending}>
                             {apply.isPending && apply.variables === r.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                            Aplicar
+                            {t("Aplicar", "Apply")}
                           </Button>
                         )}
                       </div>
@@ -99,7 +102,7 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
         <div className="space-y-6">
           {/* Ranking */}
           <Card>
-            <CardTitle>Ranking de consumo</CardTitle>
+            <CardTitle>{t("Ranking de consumo", "Usage ranking")}</CardTitle>
             {rankings.isLoading ? (
               <Loading />
             ) : rankings.isError || !rankings.data ? (
@@ -124,7 +127,7 @@ const rankings = useQuery({ queryKey: ["rankings", user?.id], queryFn: () => get
 
           {/* Anomalías */}
           <Card>
-            <CardTitle>Anomalías detectadas</CardTitle>
+            <CardTitle>{t("Anomalías detectadas", "Detected anomalies")}</CardTitle>
             {anomalies.isLoading ? (
               <Loading />
             ) : anomalies.isError || !anomalies.data ? (
