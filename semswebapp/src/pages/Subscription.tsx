@@ -16,8 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { STRIPE_ENABLED } from "../lib/stripe";
 import AddCardModal from "../components/AddCardModal";
-import type { SubscriptionStatus, SubscriptionPlan } from "../types/billing";
-
+import type { Subscription, SubscriptionStatus, SubscriptionPlan } from "../types/billing";
 const subColor: Record<SubscriptionStatus, "green" | "blue" | "rose" | "amber" | "slate"> = {
   ACTIVE: "green",
   TRIAL: "blue",
@@ -74,9 +73,14 @@ export default function Subscription() {
         /* noop */
       }
     },
-    onMutate: () => setPayError(""),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["subscription"] });
+        onMutate: () => setPayError(""),
+    onSuccess: (_data, plan) => {
+      // Refleja el nuevo plan en la UI al instante (el pago ya se procesó).
+      qc.setQueriesData<Subscription | null>({ queryKey: ["subscription", user?.id] }, (old) =>
+        old
+          ? { ...old, planId: plan.id, planName: plan.name, price: plan.price, period: plan.period, status: "ACTIVE" }
+          : old
+      );
       qc.invalidateQueries({ queryKey: ["invoices"] });
     },
     onError: (e: unknown) =>

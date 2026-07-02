@@ -10,7 +10,7 @@ import Analytics from "./pages/Analytics";
 import Alerts from "./pages/Alerts";
 import Subscription from "./pages/Subscription";
 import NotFound from "./pages/NotFound";
-
+import Reports from "./pages/Reports";
 export default function App() {
   return (
     <BrowserRouter>
@@ -26,6 +26,7 @@ export default function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/subscription" element={<Subscription />} />
+            <Route path="/reports" element={<Reports />} />
           </Route>
         </Route>
 

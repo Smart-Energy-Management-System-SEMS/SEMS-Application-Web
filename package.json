@@ -1,6 +1,11 @@
 {
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
-    "@stripe/stripe-js": "^9.8.0"
+    "@stripe/stripe-js": "^9.8.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/jspdf": "^1.3.3"
   }
 }
