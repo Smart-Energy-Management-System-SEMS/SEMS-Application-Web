@@ -41,6 +41,19 @@ export async function createDevice(payload: CreateDevicePayload): Promise<Device
   return data;
 }
 
+export async function updateDevice(
+  deviceId: string,
+  payload: Partial<CreateDevicePayload>
+): Promise<Device> {
+  if (DEMO_MODE) {
+    await delay();
+    const base = demoDevices.find((d) => d.deviceId === deviceId) ?? demoDevices[0];
+    return { ...base, ...payload, updatedAt: new Date().toISOString() };
+  }
+  const { data } = await api.put<Device>(`${BASE}/devices/${deviceId}`, payload);
+  return data;
+}
+
 export async function deleteDevice(deviceId: string): Promise<void> {
   if (DEMO_MODE) {
     await delay(200);

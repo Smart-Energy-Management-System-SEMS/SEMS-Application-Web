@@ -139,7 +139,29 @@ export async function getThresholds(userId: string): Promise<Threshold[]> {
     };
   });
 }
-
+// Crea un umbral de consumo para un dispositivo del usuario.
+export async function createThreshold(payload: {
+  userId: string;
+  deviceId: string;
+  thresholdName: string;
+  thresholdValue: number;
+  metric?: string;
+  operator?: string;
+}): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(300);
+    return;
+  }
+  await api.post(`${BASE}/thresholds`, {
+    user_id: payload.userId,
+    device_id: payload.deviceId,
+    threshold_name: payload.thresholdName,
+    threshold_value: payload.thresholdValue,
+    metric: payload.metric ?? "consumption_kwh",
+    operator: payload.operator ?? ">",
+    active: true,
+  });
+}
 export async function getNotificationPreferences(userId: string): Promise<NotificationPreference[]> {
   if (DEMO_MODE) {
     await delay(250);

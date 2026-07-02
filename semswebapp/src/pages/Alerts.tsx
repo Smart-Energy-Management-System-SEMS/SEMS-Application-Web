@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Gauge, Check, SlidersHorizontal, Loader2 } from "lucide-react";
+import { Bell, Gauge, Check, SlidersHorizontal, Loader2, Plus, X } from "lucide-react";
 import { Card, CardTitle, Loading, ErrorState, Badge, Button } from "../components/ui";
+import { Field, inputCls } from "./Login";
 import { SeverityBadge } from "./Dashboard";
 import {
   getAlerts,
   updateAlertStatus,
   getThresholds,
+  createThreshold,
   getNotificationPreferences,
   updateNotificationPreference,
 } from "../services/alerts.service";
+import { listDevices } from "../services/devices.service";
 import { kwh as fmtKwh } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
@@ -26,6 +29,30 @@ export default function Alerts() {
   const { user } = useAuth();
   const { t } = useLang();
   const [tab, setTab] = useState<AlertStatus | "ALL">("ALL");
+  const [thOpen, setThOpen] = useState(false);
+
+  const alerts = useQuery({ queryKey: ["alerts", user?.id], queryFn: () => getAlerts(user!.id), enabled: !!user });
+  const thresholds = useQuery({ queryKey: ["thresholds", user?.id], queryFn: () => getThresholds(user!.id), enabled: !!user });
+  const prefs = useQuery({ queryKey: ["preferences", user?.id], queryFn: () => getNotificationPreferences(user!.id), enabled: !!user });
+  const devices = useQuery({ queryKey: ["devices", user?.id], queryFn: () => listDevices(user!.id), enabled: !!user });
+
+  const resolve = useMutation({
+    mutationFn: (id: string) => updateAlertStatus(id, "RESOLVED"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+
+  const addThreshold = useMutation({
+    mutationFn: createThreshold,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["thresholds"] });
+      setThOpen(false);
+    },
+  });
+
+  const togglePref = useMutation({
+    mutationFn: (p: NotificationPreference) => updateNotificationPreference(user!.id, p.channel, !p.enabled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["preferences"] }),
+  });
 
   const tabs: { key: AlertStatus | "ALL"; label: string }[] = [
     { key: "ALL", label: t("Todas", "All") },
@@ -43,20 +70,6 @@ export default function Alerts() {
     ANOMALY: t("Anomalía", "Anomaly"),
     INACTIVITY: t("Inactividad", "Inactivity"),
   };
-
-  const alerts = useQuery({ queryKey: ["alerts", user?.id], queryFn: () => getAlerts(user!.id), enabled: !!user });
-  const thresholds = useQuery({ queryKey: ["thresholds", user?.id], queryFn: () => getThresholds(user!.id), enabled: !!user });
-  const prefs = useQuery({ queryKey: ["preferences", user?.id], queryFn: () => getNotificationPreferences(user!.id), enabled: !!user });
-
-  const resolve = useMutation({
-    mutationFn: (id: string) => updateAlertStatus(id, "RESOLVED"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
-  });
-
-  const togglePref = useMutation({
-    mutationFn: (p: NotificationPreference) => updateNotificationPreference(user!.id, p.channel, !p.enabled),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["preferences"] }),
-  });
 
   const filtered = (alerts.data ?? []).filter((a) => tab === "ALL" || a.status === tab);
 
@@ -137,7 +150,15 @@ export default function Alerts() {
         <div className="space-y-6">
           {/* Umbrales */}
           <Card>
-            <CardTitle action={<SlidersHorizontal className="h-4 w-4 text-slate-400" />}>{t("Umbrales", "Thresholds")}</CardTitle>
+            <CardTitle
+              action={
+                <button onClick={() => setThOpen(true)} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+                  <Plus className="h-3.5 w-3.5" /> {t("Agregar", "Add")}
+                </button>
+              }
+            >
+              {t("Umbrales", "Thresholds")}
+            </CardTitle>
             {thresholds.isLoading ? (
               <Loading />
             ) : thresholds.isError ? (
@@ -179,6 +200,73 @@ export default function Alerts() {
             )}
           </Card>
         </div>
+      </div>
+
+      {thOpen && user && (
+        <ThresholdModal
+          userId={user.id}
+          devices={(devices.data ?? []).map((d) => ({ id: d.deviceId, name: d.deviceName }))}
+          onClose={() => setThOpen(false)}
+          onCreate={(p) => addThreshold.mutate(p)}
+          loading={addThreshold.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function ThresholdModal({
+  userId,
+  devices,
+  onClose,
+  onCreate,
+  loading,
+}: {
+  userId: string;
+  devices: { id: string; name: string }[];
+  onClose: () => void;
+  onCreate: (p: { userId: string; deviceId: string; thresholdName: string; thresholdValue: number }) => void;
+  loading: boolean;
+}) {
+  const { t } = useLang();
+  const [deviceId, setDeviceId] = useState(devices[0]?.id ?? "");
+  const [thresholdName, setThresholdName] = useState("");
+  const [thresholdValue, setThresholdValue] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-card border border-slate-200 bg-white p-6 shadow-xl dark:border-navy-800 dark:bg-navy-900">
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">{t("Nuevo umbral", "New threshold")}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onCreate({ userId, deviceId, thresholdName, thresholdValue: Number(thresholdValue) });
+          }}
+          className="space-y-4"
+        >
+          <Field label={t("Nombre del umbral", "Threshold name")}>
+            <input required value={thresholdName} onChange={(e) => setThresholdName(e.target.value)} placeholder={t("Ej: Consumo alto aire", "e.g. High AC usage")} className={inputCls} />
+          </Field>
+          <Field label={t("Dispositivo", "Device")}>
+            <select value={deviceId} onChange={(e) => setDeviceId(e.target.value)} className={inputCls} required>
+              {devices.length === 0 && <option value="">{t("Sin dispositivos", "No devices")}</option>}
+              {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </Field>
+          <Field label={t("Límite (kWh/día)", "Limit (kWh/day)")}>
+            <input required type="number" min="0" step="0.1" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} placeholder="8" className={inputCls} />
+          </Field>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose} type="button">{t("Cancelar", "Cancel")}</Button>
+            <Button type="submit" disabled={loading || !deviceId}>
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />} {t("Guardar", "Save")}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Cpu, X, Loader2, Wifi, Bluetooth, Trash2 } from "lucide-react";
+import { Plus, Cpu, X, Loader2, Wifi, Bluetooth, Trash2, Pencil } from "lucide-react";
 import { Card, Button, Badge, Loading, ErrorState } from "../components/ui";
 import { Field, inputCls } from "./Login";
-import { listDevices, createDevice, deleteDevice } from "../services/devices.service";
+import { listDevices, createDevice, updateDevice, deleteDevice } from "../services/devices.service";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import type { Device, DeviceStatus, CreateDevicePayload } from "../types";
@@ -19,6 +19,7 @@ export default function Devices() {
   const { user } = useAuth();
   const { t } = useLang();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Device | null>(null);
 
   // Lista los dispositivos del usuario logueado.
   const devices = useQuery({
@@ -31,6 +32,14 @@ export default function Devices() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["devices"] });
       setOpen(false);
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: (vars: { id: string; payload: Partial<CreateDevicePayload> }) => updateDevice(vars.id, vars.payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["devices"] });
+      setEditing(null);
     },
   });
 
@@ -71,6 +80,7 @@ export default function Devices() {
             <DeviceCard
               key={d.deviceId}
               device={d}
+              onEdit={() => setEditing(d)}
               onDelete={() => remove.mutate(d.deviceId)}
               deleting={remove.isPending && remove.variables === d.deviceId}
             />
@@ -78,19 +88,21 @@ export default function Devices() {
         </div>
       )}
 
-      {open && (
-        <AddDeviceModal
+      {(open || editing) && (
+        <DeviceModal
           userId={user?.id ?? ""}
-          onClose={() => setOpen(false)}
+          device={editing}
+          onClose={() => { setOpen(false); setEditing(null); }}
           onCreate={(payload) => create.mutate(payload)}
-          loading={create.isPending}
+          onUpdate={(payload) => editing && update.mutate({ id: editing.deviceId, payload })}
+          loading={create.isPending || update.isPending}
         />
       )}
     </div>
   );
 }
 
-function DeviceCard({ device, onDelete, deleting }: { device: Device; onDelete: () => void; deleting: boolean }) {
+function DeviceCard({ device, onEdit, onDelete, deleting }: { device: Device; onEdit: () => void; onDelete: () => void; deleting: boolean }) {
   const { t } = useLang();
   const statusLabel: Record<DeviceStatus, string> = {
     ACTIVE: t("Activo", "Active"),
@@ -107,6 +119,13 @@ function DeviceCard({ device, onDelete, deleting }: { device: Device; onDelete: 
         </span>
         <div className="flex items-center gap-2">
           <Badge color={statusColor[device.status] ?? "slate"}>{statusLabel[device.status] ?? statusLabel.INACTIVE}</Badge>
+          <button
+            onClick={onEdit}
+            title={t("Editar dispositivo", "Edit device")}
+            className="text-slate-300 transition-colors hover:text-blue-500 dark:text-navy-700 dark:hover:text-blue-400"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
           <button
             onClick={() => setConfirm(true)}
             disabled={deleting}
@@ -167,36 +186,47 @@ const DEVICE_TYPES = [
 ];
 const PROTOCOLS = ["WIFI", "BLUETOOTH"];
 
-function AddDeviceModal({
+function DeviceModal({
   userId,
+  device,
   onClose,
   onCreate,
+  onUpdate,
   loading,
 }: {
   userId: string;
+  device: Device | null;
   onClose: () => void;
   onCreate: (p: CreateDevicePayload) => void;
+  onUpdate: (p: Partial<CreateDevicePayload>) => void;
   loading: boolean;
 }) {
-  const [deviceName, setDeviceName] = useState("");
-  const [deviceType, setDeviceType] = useState("meter");
-  const [brand, setBrand] = useState("");
-  const [model, setModel] = useState("");
-  const [connectionProtocol, setConnectionProtocol] = useState("WIFI");
-  const [externalDeviceCode, setExternalDeviceCode] = useState("");
+  const isEdit = !!device;
+  const [deviceName, setDeviceName] = useState(device?.deviceName ?? "");
+  const [deviceType, setDeviceType] = useState(device?.deviceType ?? "meter");
+  const [brand, setBrand] = useState(device?.brand ?? "");
+  const [model, setModel] = useState(device?.model ?? "");
+  const [connectionProtocol, setConnectionProtocol] = useState(device?.connectionProtocol ?? "WIFI");
+  const [externalDeviceCode, setExternalDeviceCode] = useState(device?.externalDeviceCode ?? "");
   const { t } = useLang();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-card border border-slate-200 bg-white p-6 shadow-xl dark:border-navy-800 dark:bg-navy-900">
         <div className="mb-5 flex items-center justify-between">
-          <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">{t("Agregar dispositivo", "Add device")}</h3>
+          <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">
+            {isEdit ? t("Editar dispositivo", "Edit device") : t("Agregar dispositivo", "Add device")}
+          </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onCreate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode, userId });
+            if (isEdit) {
+              onUpdate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode });
+            } else {
+              onCreate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode, userId });
+            }
           }}
           className="space-y-4"
         >
@@ -230,7 +260,7 @@ function AddDeviceModal({
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>{t("Cancelar", "Cancel")}</Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />} {t("Guardar", "Save")}
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />} {isEdit ? t("Guardar cambios", "Save changes") : t("Guardar", "Save")}
             </Button>
           </div>
         </form>

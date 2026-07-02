@@ -6,12 +6,12 @@ import {
   getPlans,
   getMySubscription,
   changePlan,
+  cancelSubscription,
   getPaymentMethods,
   getInvoices,
   processPayment,
   deletePaymentMethod,
-} from "../services/subscriptions.service";
-import { soles } from "../lib/format";
+} from "../services/subscriptions.service";import { soles } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { STRIPE_ENABLED } from "../lib/stripe";
@@ -95,7 +95,14 @@ export default function Subscription() {
     mutationFn: deletePaymentMethod,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["paymentMethods"] }),
   });
-
+  const cancel = useMutation({
+    mutationFn: () => cancelSubscription(sub.data!.id),
+    onSuccess: () => {
+      qc.setQueriesData<Subscription | null>({ queryKey: ["subscription", user?.id] }, (old) =>
+        old ? { ...old, status: "CANCELED" } : old
+      );
+    },
+  });
   return (
     <div className="space-y-6">
       <div>
@@ -103,7 +110,7 @@ export default function Subscription() {
         <p className="text-sm text-slate-500 dark:text-slate-400">{t("Gestiona tu plan, métodos de pago y facturas.", "Manage your plan, payment methods and invoices.")}</p>
       </div>
 
-      {/* Suscripción actual */}
+            {/* Suscripción actual */}
       <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white dark:from-blue-600 dark:to-blue-800">
         {sub.isLoading ? (
           <div className="py-6 text-center text-blue-100">{t("Cargando...", "Loading...")}</div>
@@ -121,6 +128,16 @@ export default function Subscription() {
                 {soles(sub.data.price)} / {sub.data.period} · {t("se renueva el", "renews on")} {sub.data.renewalDate}
               </p>
             </div>
+            {sub.data.status === "ACTIVE" && (
+              <button
+                onClick={() => cancel.mutate()}
+                disabled={cancel.isPending}
+                className="inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/25 disabled:opacity-60"
+              >
+                {cancel.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t("Cancelar renovación", "Cancel renewal")}
+              </button>
+            )}
           </div>
         ) : (
           <p className="py-6 text-center text-blue-100">{t("No tienes una suscripción activa.", "You have no active subscription.")}</p>
