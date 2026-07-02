@@ -11,6 +11,7 @@ import Alerts from "./pages/Alerts";
 import Subscription from "./pages/Subscription";
 import NotFound from "./pages/NotFound";
 import Reports from "./pages/Reports";
+import Household from "./pages/Household";
 export default function App() {
   return (
     <BrowserRouter>
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/subscription" element={<Subscription />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/household" element={<Household />} />
           </Route>
         </Route>
 

@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  LayoutDashboard, Cpu, Activity, LineChart, Bell, FileText, CreditCard, Zap, X,
+  LayoutDashboard, Cpu, Activity, LineChart, Bell, FileText, Home, CreditCard, Zap, X,
 } from "lucide-react";
 import { getMySubscription } from "../services/subscriptions.service";
 import { useAuth } from "../context/AuthContext";
@@ -17,6 +17,8 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
     { to: "/alerts", label: t("Alertas", "Alerts"), icon: Bell },
     { to: "/reports", label: t("Informes", "Reports"), icon: FileText },
     { to: "/subscription", label: t("Suscripción", "Subscription"), icon: CreditCard },
+    { to: "/household", label: t("Hogar", "Household"), icon: Home },
+
   ];
   return (
     <>
