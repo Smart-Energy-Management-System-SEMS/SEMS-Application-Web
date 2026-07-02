@@ -35,10 +35,13 @@ export default function Devices() {
     },
   });
 
-  const update = useMutation({
+    const update = useMutation({
     mutationFn: (vars: { id: string; payload: Partial<CreateDevicePayload> }) => updateDevice(vars.id, vars.payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["devices"] });
+      // El nombre del dispositivo se muestra en varias vistas; refrescamos todas.
+      ["devices", "consumption", "summary", "rankings", "alerts", "thresholds"].forEach((key) =>
+        qc.invalidateQueries({ queryKey: [key] })
+      );
       setEditing(null);
     },
   });
