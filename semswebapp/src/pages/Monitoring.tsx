@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Gauge, Zap, Receipt } from "lucide-react";
-import { Card, CardTitle, Loading, ErrorState, Badge } from "../components/ui";
+import { Gauge, Zap, Receipt, TrendingUp, TrendingDown } from "lucide-react";import { Card, CardTitle, Loading, ErrorState, Badge } from "../components/ui";
 import ConsumptionChart from "../components/charts/ConsumptionChart";
-import { getReadings, getDeviceConsumption, getMeters } from "../services/energy.service";
-import { useAuth } from "../context/AuthContext";
+import { getReadings, getDeviceConsumption, getMeters, getPeriodComparison } from "../services/energy.service";import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { soles, kwh as fmtKwh } from "../lib/format";
 
@@ -17,7 +15,7 @@ export default function Monitoring() {
   const readings = useQuery({ queryKey: ["readings", user?.id, days], queryFn: () => getReadings(user!.id, days), enabled: !!user });
   const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
   const meters = useQuery({ queryKey: ["meters", user?.id], queryFn: () => getMeters(user!.id), enabled: !!user });
-
+  const comparison = useQuery({ queryKey: ["comparison", user?.id, days], queryFn: () => getPeriodComparison(user!.id, days), enabled: !!user });
   const totalKwh = readings.data?.reduce((s, r) => s + r.kwh, 0) ?? 0;
   const totalCost = readings.data?.reduce((s, r) => s + r.cost, 0) ?? 0;
 
@@ -68,7 +66,17 @@ export default function Monitoring() {
           </div>
         </Card>
       </div>
-
+      {/* Comparación de periodos */}
+      <Card>
+        <CardTitle>{t("Comparación con el periodo anterior", "Comparison with previous period")}</CardTitle>
+        {comparison.isLoading ? (
+          <Loading />
+        ) : comparison.isError || !comparison.data ? (
+          <ErrorState />
+        ) : (
+          <PeriodCompare data={comparison.data} days={days} />
+        )}
+      </Card>
       {/* Gráfico con controles */}
       <Card>
         <CardTitle
@@ -125,7 +133,49 @@ export default function Monitoring() {
     </div>
   );
 }
+function PeriodCompare({
+  data,
+  days,
+}: {
+  data: { currentKwh: number; previousKwh: number; currentCost: number; previousCost: number; deltaPct: number };
+  days: number;
+}) {
+  const { t } = useLang();
+  const up = data.deltaPct > 0;
+  const flat = data.deltaPct === 0;
 
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-slate-100 p-4 dark:border-navy-800">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t("Periodo actual", "Current period")} ({days} {t("días", "days")})</p>
+          <p className="mt-1 font-display text-xl font-extrabold text-slate-900 dark:text-white">{fmtKwh(data.currentKwh)}</p>
+          <p className="text-xs text-slate-400">{soles(data.currentCost)}</p>
+        </div>
+        <div className="rounded-lg border border-slate-100 p-4 dark:border-navy-800">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t("Periodo anterior", "Previous period")}</p>
+          <p className="mt-1 font-display text-xl font-extrabold text-slate-500 dark:text-slate-400">{fmtKwh(data.previousKwh)}</p>
+          <p className="text-xs text-slate-400">{soles(data.previousCost)}</p>
+        </div>
+      </div>
+
+      <div className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
+        flat ? "bg-slate-50 text-slate-600 dark:bg-navy-800 dark:text-slate-300"
+        : up ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
+        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+      }`}>
+        {!flat && (up ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />)}
+        <span className="font-semibold">
+          {flat
+            ? t("Tu consumo se mantuvo igual.", "Your usage stayed the same.")
+            : up
+              ? `${t("Subiste", "Up")} ${Math.abs(data.deltaPct)}% ${t("vs. el periodo anterior.", "vs. the previous period.")}`
+              : `${t("Bajaste", "Down")} ${Math.abs(data.deltaPct)}% ${t("vs. el periodo anterior. ¡Bien!", "vs. the previous period. Nice!")}`}
+        </span>
+      </div>
+    </div>
+  );
+}
 function Segmented({
   value,
   onChange,

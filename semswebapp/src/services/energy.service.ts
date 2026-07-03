@@ -44,7 +44,39 @@ export async function getReadings(userId: string, days = 14): Promise<EnergyRead
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, v]) => ({ date, kwh: +v.kwh.toFixed(2), cost: +v.cost.toFixed(2) }));
 }
+export interface PeriodComparison {
+  currentKwh: number;
+  previousKwh: number;
+  currentCost: number;
+  previousCost: number;
+  deltaPct: number; // variación % del actual respecto al anterior
+}
 
+// Compara el periodo actual (últimos N días) contra el anterior equivalente.
+export async function getPeriodComparison(userId: string, days = 7): Promise<PeriodComparison> {
+  const readings = await getReadings(userId, days * 2); // agregadas por día
+  const cutoffMs = Date.now() - days * 86_400_000;
+  let currentKwh = 0, previousKwh = 0, currentCost = 0, previousCost = 0;
+  for (const r of readings) {
+    const t = new Date(r.date).getTime();
+    if (isNaN(t)) continue;
+    if (t >= cutoffMs) {
+      currentKwh += r.kwh;
+      currentCost += r.cost;
+    } else {
+      previousKwh += r.kwh;
+      previousCost += r.cost;
+    }
+  }
+  const deltaPct = previousKwh > 0 ? ((currentKwh - previousKwh) / previousKwh) * 100 : 0;
+  return {
+    currentKwh: +currentKwh.toFixed(2),
+    previousKwh: +previousKwh.toFixed(2),
+    currentCost: +currentCost.toFixed(2),
+    previousCost: +previousCost.toFixed(2),
+    deltaPct: +deltaPct.toFixed(1),
+  };
+}
 export async function getDeviceConsumption(userId: string): Promise<DeviceConsumption[]> {
   if (DEMO_MODE) { await delay(); return demoConsumption; }
 
