@@ -6,6 +6,7 @@ import { Field, inputCls } from "./Login";
 import { listDevices, createDevice, updateDevice, deleteDevice } from "../services/devices.service";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
+import { CONSUMPTION_PROFILES, profileById, getDeviceExtras, saveDeviceExtras, type DeviceExtras } from "../lib/deviceExtras";
 import type { Device, DeviceStatus, CreateDevicePayload } from "../types";
 
 const statusColor: Record<DeviceStatus, "green" | "slate" | "amber"> = {
@@ -21,24 +22,29 @@ export default function Devices() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
 
-  // Lista los dispositivos del usuario logueado.
   const devices = useQuery({
     queryKey: ["devices", user?.id],
     queryFn: () => listDevices(user?.id),
   });
 
   const create = useMutation({
-    mutationFn: createDevice,
+    mutationFn: async (vars: { payload: CreateDevicePayload; extras: DeviceExtras }) => {
+      const dev = await createDevice(vars.payload);
+      saveDeviceExtras(dev.deviceId, vars.extras);
+      return dev;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["devices"] });
       setOpen(false);
     },
   });
 
-    const update = useMutation({
-    mutationFn: (vars: { id: string; payload: Partial<CreateDevicePayload> }) => updateDevice(vars.id, vars.payload),
+  const update = useMutation({
+    mutationFn: async (vars: { id: string; payload: Partial<CreateDevicePayload>; extras: DeviceExtras }) => {
+      saveDeviceExtras(vars.id, vars.extras);
+      return updateDevice(vars.id, vars.payload);
+    },
     onSuccess: () => {
-      // El nombre del dispositivo se muestra en varias vistas; refrescamos todas.
       ["devices", "consumption", "summary", "rankings", "alerts", "thresholds"].forEach((key) =>
         qc.invalidateQueries({ queryKey: [key] })
       );
@@ -48,8 +54,6 @@ export default function Devices() {
 
   const remove = useMutation({
     mutationFn: deleteDevice,
-    // El backend hace borrado lógico (status INACTIVE); quitamos la tarjeta de
-    // la caché para que desaparezca al instante en lugar de quedar "Inactivo".
     onSuccess: (_data, deletedId) => {
       qc.setQueriesData<Device[]>({ queryKey: ["devices"] }, (old) =>
         old ? old.filter((d) => d.deviceId !== deletedId) : old
@@ -96,8 +100,8 @@ export default function Devices() {
           userId={user?.id ?? ""}
           device={editing}
           onClose={() => { setOpen(false); setEditing(null); }}
-          onCreate={(payload) => create.mutate(payload)}
-          onUpdate={(payload) => editing && update.mutate({ id: editing.deviceId, payload })}
+          onCreate={(payload, extras) => create.mutate({ payload, extras })}
+          onUpdate={(payload, extras) => editing && update.mutate({ id: editing.deviceId, payload, extras })}
           loading={create.isPending || update.isPending}
         />
       )}
@@ -113,6 +117,8 @@ function DeviceCard({ device, onEdit, onDelete, deleting }: { device: Device; on
     MAINTENANCE: t("Mantenimiento", "Maintenance"),
   };
   const [confirm, setConfirm] = useState(false);
+  const extras = getDeviceExtras(device.deviceId);
+  const profile = profileById(extras.profileId);
 
   return (
     <Card>
@@ -154,6 +160,8 @@ function DeviceCard({ device, onEdit, onDelete, deleting }: { device: Device; on
           }
         />
         <Row label={t("Código", "Code")} value={device.externalDeviceCode} />
+        {extras.location && <Row label={t("Ubicación", "Location")} value={extras.location} />}
+        {profile.watts > 0 && <Row label={t("Perfil / potencia", "Profile / power")} value={`${profile.name} · ${profile.watts} W`} />}
       </div>
 
       {confirm && (
@@ -200,17 +208,20 @@ function DeviceModal({
   userId: string;
   device: Device | null;
   onClose: () => void;
-  onCreate: (p: CreateDevicePayload) => void;
-  onUpdate: (p: Partial<CreateDevicePayload>) => void;
+  onCreate: (p: CreateDevicePayload, extras: DeviceExtras) => void;
+  onUpdate: (p: Partial<CreateDevicePayload>, extras: DeviceExtras) => void;
   loading: boolean;
 }) {
   const isEdit = !!device;
+  const initExtras = device ? getDeviceExtras(device.deviceId) : { location: "", profileId: "none" };
   const [deviceName, setDeviceName] = useState(device?.deviceName ?? "");
   const [deviceType, setDeviceType] = useState(device?.deviceType ?? "meter");
   const [brand, setBrand] = useState(device?.brand ?? "");
   const [model, setModel] = useState(device?.model ?? "");
   const [connectionProtocol, setConnectionProtocol] = useState(device?.connectionProtocol ?? "WIFI");
   const [externalDeviceCode, setExternalDeviceCode] = useState(device?.externalDeviceCode ?? "");
+  const [location, setLocation] = useState(initExtras.location);
+  const [profileId, setProfileId] = useState(initExtras.profileId);
   const { t } = useLang();
 
   return (
@@ -225,10 +236,11 @@ function DeviceModal({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const extras = { location, profileId };
             if (isEdit) {
-              onUpdate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode });
+              onUpdate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode }, extras);
             } else {
-              onCreate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode, userId });
+              onCreate({ deviceName, deviceType, brand, model, connectionProtocol, externalDeviceCode, userId }, extras);
             }
           }}
           className="space-y-4"
@@ -258,6 +270,16 @@ function DeviceModal({
           </div>
           <Field label={t("Código externo", "External code")}>
             <input required value={externalDeviceCode} onChange={(e) => setExternalDeviceCode(e.target.value)} placeholder="Ej: MED-001" className={inputCls} />
+          </Field>
+          <Field label={t("Ubicación", "Location")}>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t("Ej: Cocina, 1er piso", "e.g. Kitchen, 1st floor")} className={inputCls} />
+          </Field>
+          <Field label={t("Perfil de consumo (potencia nominal)", "Consumption profile (nominal power)")}>
+            <select value={profileId} onChange={(e) => setProfileId(e.target.value)} className={inputCls}>
+              {CONSUMPTION_PROFILES.map((p) => (
+                <option key={p.id} value={p.id}>{p.watts > 0 ? `${p.name} (${p.watts} W)` : p.name}</option>
+              ))}
+            </select>
           </Field>
 
           <div className="flex justify-end gap-2 pt-2">
