@@ -3,7 +3,7 @@ import { demoReadings, demoConsumption, demoMeters } from "../lib/demo";
 import { listDevices } from "./devices.service";
 import { getTariff, DEFAULT_TARIFF } from "../lib/tariff";
 import type { EnergyReading, DeviceConsumption, EnergyMeter } from "../types";
-
+import { getHomeProfile } from "../lib/homeStore";
 // Energy Monitoring Service (vía API Gateway, recursos bajo /api/v1).
 const BASE = "/api/v1";
 
@@ -158,16 +158,20 @@ export async function getMeters(userId: string): Promise<EnergyMeter[]> {
 }
 
 // Vincula (registra y asocia) un medidor EOS al hogar/cuenta del residente.
-// ⚠️ Ajusta los nombres de campo si tu Energy-Monitoring espera otro contrato.
+// El Energy-Monitoring exige brand y location además del serial.
 export async function linkMeter(userId: string, serial: string, model = "EOS"): Promise<EnergyMeter> {
   if (DEMO_MODE) {
     await delay(300);
     return { meterId: crypto.randomUUID(), name: model || serial, active: true, lastReadingKwh: 0 };
   }
+  // Ubicación: usamos la del perfil del hogar si el usuario la configuró.
+  const location = getHomeProfile(userId).location || "Hogar";
   const { data } = await api.post<RawMeter>(`${BASE}/energy-meters`, {
     user_id: userId,
     meter_serial: serial,
     model,
+    brand: "EOS",
+    location,
     status: "active",
   });
   return mapMeter(data);
