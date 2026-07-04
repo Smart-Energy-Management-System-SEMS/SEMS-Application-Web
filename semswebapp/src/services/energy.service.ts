@@ -80,7 +80,14 @@ export async function getPeriodComparison(userId: string, days = 7): Promise<Per
 export async function getDeviceConsumption(userId: string): Promise<DeviceConsumption[]> {
   if (DEMO_MODE) { await delay(); return demoConsumption; }
 
-  // 1) Agregados oficiales (si existen).
+    // Dispositivos vigentes del usuario: sirven para poner nombre y para
+  // descartar los que ya fueron eliminados (no deben seguir apareciendo).
+  const devices = await listDevices(userId).catch(() => []);
+  const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
+  const exists = (id: string) => devices.length === 0 || nameById.has(id);
+
+  // 1) Agregados oficiales del backend (si hay). Si el endpoint falla
+  //    (p. ej. 500), lo ignoramos y caemos a la estimación por lecturas.
   let agg: RawConsumption[] = [];
   try {
     const { data } = await api.get<RawConsumption[]>(
@@ -91,26 +98,26 @@ export async function getDeviceConsumption(userId: string): Promise<DeviceConsum
   } catch {
     agg = [];
   }
+  agg = agg.filter((c) => exists(c.device_id));
   if (agg.length > 0) {
     const total = agg.reduce((s, c) => s + (c.total_kwh ?? 0), 0) || 1;
     return agg.map((c) => ({
       deviceId: c.device_id,
-      deviceName: c.device_name,
+      deviceName: nameById.get(c.device_id) ?? c.device_name,
       kwh: +(c.total_kwh ?? 0).toFixed(2),
       cost: +(c.cost_estimate_soles ?? 0).toFixed(2),
       pct: Math.round(((c.total_kwh ?? 0) / total) * 100),
     }));
   }
 
-  // 2) Estimación a partir de las lecturas crudas (agrupadas por dispositivo).
-  const [readings, devices, price] = await Promise.all([
+  // 2) Estimación: agrupa las lecturas por dispositivo.
+  const [readings, price] = await Promise.all([
     getReadingsRaw(userId),
-    listDevices(userId).catch(() => []),
     getPricePerKwh(),
   ]);
-  const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
   const kwhByDevice = new Map<string, number>();
   for (const r of readings) {
+    if (!exists(r.device_id)) continue; // ignoramos lecturas de dispositivos eliminados
     kwhByDevice.set(r.device_id, (kwhByDevice.get(r.device_id) ?? 0) + (r.energy_kwh ?? 0));
   }
   const total = [...kwhByDevice.values()].reduce((s, k) => s + k, 0) || 1;
@@ -125,10 +132,45 @@ export async function getDeviceConsumption(userId: string): Promise<DeviceConsum
     }));
 }
 
+function mapMeter(m: RawMeter): EnergyMeter {
+  return {
+    meterId: m.id,
+    name: m.model || m.meter_serial,
+    active: m.status === "active",
+    lastReadingKwh: 0,
+  };
+}
+
 export async function getMeters(userId: string): Promise<EnergyMeter[]> {
-  if (DEMO_MODE) { await delay(250); return demoMeters; }
+  if (DEMO_MODE) {
+    await delay(250);
+    return demoMeters;
+  }
   const { data } = await api.get<RawMeter[]>(`${BASE}/energy-meters/user/${userId}`);
-  return (data ?? []).map((m) => ({
-    meterId: m.id, name: m.model || m.meter_serial, active: m.status === "active", lastReadingKwh: 0,
-  }));
+  return (data ?? []).map(mapMeter);
+}
+
+// Vincula (registra y asocia) un medidor EOS al hogar/cuenta del residente.
+// ⚠️ Ajusta los nombres de campo si tu Energy-Monitoring espera otro contrato.
+export async function linkMeter(userId: string, serial: string, model = "EOS"): Promise<EnergyMeter> {
+  if (DEMO_MODE) {
+    await delay(300);
+    return { meterId: crypto.randomUUID(), name: model || serial, active: true, lastReadingKwh: 0 };
+  }
+  const { data } = await api.post<RawMeter>(`${BASE}/energy-meters`, {
+    user_id: userId,
+    meter_serial: serial,
+    model,
+    status: "active",
+  });
+  return mapMeter(data);
+}
+
+// Desvincula el medidor de la cuenta.
+export async function unlinkMeter(meterId: string): Promise<void> {
+  if (DEMO_MODE) {
+    await delay(200);
+    return;
+  }
+  await api.delete(`${BASE}/energy-meters/${meterId}`);
 }

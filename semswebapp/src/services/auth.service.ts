@@ -1,12 +1,9 @@
 import { api, DEMO_MODE, delay, tokenStore } from "../lib/api";
 import { demoUser } from "../lib/demo";
-import type { AuthResponse, User } from "../types";
+import type { AuthResponse, User, UserSegment } from "../types";
 
 // Rol por defecto al registrarse desde la web (usuario normal del hogar).
-// ⚠️ Debe ser un valor válido del enum RoleName de tu IAM.
-//    Confirmado que existe ADMIN; si tu enum no tiene ADMIN, cámbialo
-//    por el rol correcto que muestre el schema de Swagger.
-const DEFAULT_ROLE = "ADMIN";
+const DEFAULT_ROLE = "RESIDENT";
 
 // Forma REAL de la respuesta del IAM en /auth/login y /auth/register.
 interface IamAuthResponse {
@@ -14,6 +11,12 @@ interface IamAuthResponse {
   userId: string;
   emailAddress: string;
   roles: string[];
+  segment?: string;
+}
+
+function normSegment(s: unknown): UserSegment | undefined {
+  const u = String(s ?? "").toUpperCase();
+  return u === "HOMEOWNER" || u === "TENANT" ? (u as UserSegment) : undefined;
 }
 
 // El IAM no guarda nombre, así que armamos uno para mostrar a partir del correo.
@@ -27,7 +30,8 @@ function mapUser(res: IamAuthResponse): User {
     id: res.userId,
     email: res.emailAddress,
     fullName: displayNameFromEmail(res.emailAddress),
-    role: (res.roles?.[0] as User["role"]) ?? "ADMIN",
+    role: (res.roles?.[0] as User["role"]) ?? "RESIDENT",
+    segment: normSegment(res.segment),
   };
 }
 
@@ -39,7 +43,7 @@ function decodeToken(token: string): User | null {
       id: payload.userId ?? payload.sub ?? "",
       email: payload.email ?? payload.emailAddress ?? "",
       fullName: displayNameFromEmail(payload.email ?? payload.emailAddress ?? ""),
-      role: (payload.roles?.[0] as User["role"]) ?? "ADMIN",
+      role: (payload.roles?.[0] as User["role"]) ?? "RESIDENT",
     };
   } catch {
     return null;
@@ -57,6 +61,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
   });
   return { token: data.token, user: mapUser(data) };
 }
+
 // Login con Google: el frontend obtiene un ID token (GIS) y el IAM lo verifica.
 export async function loginWithGoogle(idToken: string): Promise<AuthResponse> {
   if (DEMO_MODE) {
@@ -66,24 +71,27 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResponse> {
   const { data } = await api.post<IamAuthResponse>("/api/v1/auth/google", { idToken });
   return { token: data.token, user: mapUser(data) };
 }
+
 export async function register(
   fullName: string,
   email: string,
-  password: string
+  password: string,
+  segment?: UserSegment
 ): Promise<AuthResponse> {
   if (DEMO_MODE) {
     await delay();
-    return { token: "demo-token", user: { ...demoUser, fullName, email } };
+    return { token: "demo-token", user: { ...demoUser, fullName, email, segment } };
   }
-  // El IAM registra con emailAddress + password + role.
+  // El IAM registra con emailAddress + password + role + segment.
   await api.post("/api/v1/auth/register", {
     emailAddress: email,
     password,
     role: DEFAULT_ROLE,
+    segment,
   });
   // Tras registrar, iniciamos sesión para obtener el token.
   const res = await login(email, password);
-  // Usamos el nombre que el usuario escribió en el formulario (el IAM no lo guarda).
+  // El nombre lo escribió el usuario (el IAM no lo guarda); el segmento lo trae el login.
   return fullName ? { ...res, user: { ...res.user, fullName } } : res;
 }
 

@@ -119,15 +119,20 @@ export async function getRankings(userId: string): Promise<ConsumptionRanking[]>
   const devices = await listDevices(userId).catch(() => []);
   const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
 
-  return items.map((r, i) => {
-    const id = str(r.device_id);
-    const real = nameById.get(id);
-    const name = str(r.device_name);
-    return {
-      rank: num(r.rank, r.position) || i + 1,
-      deviceName: real || (name && name !== id ? name : `Dispositivo ${id.slice(0, 6)}`),
-      kwh: num(r.total_kwh, r.kwh, r.consumption_kwh),
-      cost: num(r.cost_estimate_soles, r.cost_soles, r.cost),
-    };
-  });
+ return items
+    .filter((r) => {
+      const id = str(r.device_id);
+      return !id || devices.length === 0 || nameById.has(id);
+    })
+    .map((r, i) => {
+      const id = str(r.device_id);
+      const real = nameById.get(id);
+      const name = str(r.device_name);
+      return {
+        rank: i + 1,
+        deviceName: real || (name && name !== id ? name : `Dispositivo ${id.slice(0, 6)}`),
+        kwh: num(r.total_kwh, r.kwh, r.consumption_kwh),
+        cost: num(r.estimated_amount, r.cost_estimate_soles, r.cost_soles, r.cost),
+      };
+    });
 }

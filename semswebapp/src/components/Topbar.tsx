@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Menu, Moon, Sun, LogOut, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Menu, Moon, Sun, LogOut, ChevronDown, Settings } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { useLang } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
@@ -9,6 +10,7 @@ export default function Topbar({ onMenu, title }: { onMenu: () => void; title: s
   const { theme, toggle } = useTheme();
   const { lang, toggle: toggleLang, t } = useLang();
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const initials = (user?.fullName ?? "U")
@@ -70,9 +72,23 @@ export default function Topbar({ onMenu, title }: { onMenu: () => void; title: s
                 <div className="border-b border-slate-100 px-4 py-3 dark:border-navy-800">
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">{user?.fullName}</p>
                   <p className="truncate text-xs text-slate-400">{user?.email}</p>
+                  {user?.segment && (
+                    <span className="mt-1.5 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                      {user.segment === "HOMEOWNER"
+                        ? t("Propietario de vivienda", "Homeowner")
+                        : t("Estudiante / Inquilino", "Student / Tenant")}
+                    </span>
+                  )}
                 </div>
                 <button
-                  onClick={logout}
+                  onClick={() => { setMenuOpen(false); navigate("/settings"); }}
+                  className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-navy-800 dark:text-slate-200 dark:hover:bg-navy-800"
+                >
+                  <Settings className="h-4 w-4" />
+                  {t("Configuración", "Settings")}
+                </button>
+                <button
+                  onClick={() => { logout(); navigate("/login", { replace: true }); }}
                   className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                 >
                   <LogOut className="h-4 w-4" />

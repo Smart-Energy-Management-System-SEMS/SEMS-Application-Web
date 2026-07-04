@@ -17,6 +17,7 @@ export default function AppLayout() {
     "/alerts": t("Alertas", "Alerts"),
     "/subscription": t("Suscripción y pagos", "Subscription & payments"),
     "/reports": t("Reportes", "Reports"),
+    "/settings": t("Configuración", "Settings"),
   };
   const title = titles[pathname] ?? "SEMS";
 

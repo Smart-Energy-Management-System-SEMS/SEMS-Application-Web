@@ -1,12 +1,13 @@
 // Tipos de dominio de SEMS (alineados con los microservicios).
-
+// Segmento objetivo del reporte: propietario de vivienda o estudiante/inquilino.
+export type UserSegment = "HOMEOWNER" | "TENANT";
 export interface User {
   id: string;
   email: string;
   fullName: string;
   role: "ADMIN" | "RESIDENT" | "GUEST";
+  segment?: UserSegment;   // <-- agrega esta línea
 }
-
 export interface AuthResponse {
   token: string;
   user: User;

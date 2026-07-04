@@ -12,6 +12,7 @@ import Subscription from "./pages/Subscription";
 import NotFound from "./pages/NotFound";
 import Reports from "./pages/Reports";
 import Household from "./pages/Household";
+import Settings from "./pages/Settings";
 export default function App() {
   return (
     <BrowserRouter>
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/subscription" element={<Subscription />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/household" element={<Household />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>
 

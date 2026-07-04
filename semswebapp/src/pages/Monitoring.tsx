@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Gauge, Zap, Receipt, TrendingUp, TrendingDown } from "lucide-react";import { Card, CardTitle, Loading, ErrorState, Badge } from "../components/ui";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Gauge, Zap, Receipt, TrendingUp, TrendingDown, Plus, Trash2, Loader2 } from "lucide-react";
+import { Card, CardTitle, Button, Loading, ErrorState, Badge } from "../components/ui";
 import ConsumptionChart from "../components/charts/ConsumptionChart";
-import { getReadings, getDeviceConsumption, getMeters, getPeriodComparison } from "../services/energy.service";import { useAuth } from "../context/AuthContext";
+import { getReadings, getDeviceConsumption, getMeters, linkMeter, unlinkMeter, getPeriodComparison } from "../services/energy.service";
+import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { soles, kwh as fmtKwh } from "../lib/format";
 
@@ -14,8 +16,8 @@ export default function Monitoring() {
 
   const readings = useQuery({ queryKey: ["readings", user?.id, days], queryFn: () => getReadings(user!.id, days), enabled: !!user });
   const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
-  const meters = useQuery({ queryKey: ["meters", user?.id], queryFn: () => getMeters(user!.id), enabled: !!user });
   const comparison = useQuery({ queryKey: ["comparison", user?.id, days], queryFn: () => getPeriodComparison(user!.id, days), enabled: !!user });
+
   const totalKwh = readings.data?.reduce((s, r) => s + r.kwh, 0) ?? 0;
   const totalCost = readings.data?.reduce((s, r) => s + r.cost, 0) ?? 0;
 
@@ -26,24 +28,8 @@ export default function Monitoring() {
         <p className="text-sm text-slate-500 dark:text-slate-400">{t("Consumo de tu hogar en tiempo real.", "Your home's energy usage in real time.")}</p>
       </div>
 
-      {/* Medidores */}
-      {meters.data?.map((m) => (
-        <Card key={m.meterId} className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
-              <Gauge className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="font-semibold text-slate-900 dark:text-white">{m.name}</p>
-              <p className="text-xs text-slate-400">{t("Lectura acumulada", "Total reading")}: {fmtKwh(m.lastReadingKwh)}</p>
-            </div>
-          </div>
-          <Badge color={m.active ? "green" : "slate"}>
-            <span className={`h-1.5 w-1.5 rounded-full ${m.active ? "bg-emerald-500 animate-pulse-soft" : "bg-slate-400"}`} />
-            {m.active ? t("En línea", "Online") : t("Desconectado", "Offline")}
-          </Badge>
-        </Card>
-      ))}
+      {/* Medidores (vincular / desvincular) */}
+      {user && <MetersManager userId={user.id} />}
 
       {/* Totales */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -66,6 +52,7 @@ export default function Monitoring() {
           </div>
         </Card>
       </div>
+
       {/* Comparación de periodos */}
       <Card>
         <CardTitle>{t("Comparación con el periodo anterior", "Comparison with previous period")}</CardTitle>
@@ -77,6 +64,7 @@ export default function Monitoring() {
           <PeriodCompare data={comparison.data} days={days} />
         )}
       </Card>
+
       {/* Gráfico con controles */}
       <Card>
         <CardTitle
@@ -133,6 +121,98 @@ export default function Monitoring() {
     </div>
   );
 }
+
+function MetersManager({ userId }: { userId: string }) {
+  const { t } = useLang();
+  const qc = useQueryClient();
+  const [serial, setSerial] = useState("");
+  const [error, setError] = useState("");
+
+  const meters = useQuery({ queryKey: ["meters", userId], queryFn: () => getMeters(userId) });
+
+  const link = useMutation({
+    mutationFn: () => linkMeter(userId, serial.trim()),
+    onSuccess: () => {
+      setSerial("");
+      setError("");
+      qc.invalidateQueries({ queryKey: ["meters", userId] });
+    },
+    onError: () => setError(t("No se pudo vincular el medidor. Revisa el código de serie.", "Couldn't link the meter. Check the serial code.")),
+  });
+
+  const unlink = useMutation({
+    mutationFn: (meterId: string) => unlinkMeter(meterId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meters", userId] }),
+  });
+
+  const onLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serial.trim()) return;
+    link.mutate();
+  };
+
+  return (
+    <Card>
+      <CardTitle action={<Gauge className="h-4 w-4 text-slate-400" />}>{t("Medidores EOS", "EOS meters")}</CardTitle>
+
+      {meters.isLoading ? (
+        <Loading />
+      ) : meters.isError ? (
+        <ErrorState />
+      ) : (meters.data?.length ?? 0) === 0 ? (
+        <p className="py-3 text-sm text-slate-400">{t("Aún no tienes un medidor vinculado.", "You don't have a meter linked yet.")}</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {meters.data!.map((m) => (
+            <li key={m.meterId} className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-navy-800">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+                  <Gauge className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-slate-900 dark:text-white">{m.name}</p>
+                  <p className="text-xs text-slate-400">{t("Lectura acumulada", "Total reading")}: {fmtKwh(m.lastReadingKwh)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge color={m.active ? "green" : "slate"}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${m.active ? "bg-emerald-500 animate-pulse-soft" : "bg-slate-400"}`} />
+                  {m.active ? t("En línea", "Online") : t("Desconectado", "Offline")}
+                </Badge>
+                <button
+                  onClick={() => {
+                    if (confirm(t("¿Desvincular este medidor de tu cuenta?", "Unlink this meter from your account?"))) unlink.mutate(m.meterId);
+                  }}
+                  disabled={unlink.isPending}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:hover:bg-rose-500/10"
+                  title={t("Desvincular", "Unlink")}
+                >
+                  {unlink.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Vincular un nuevo medidor por código de serie */}
+      <form onSubmit={onLink} className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={serial}
+          onChange={(e) => setSerial(e.target.value)}
+          placeholder={t("Código de serie del medidor EOS", "EOS meter serial code")}
+          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-navy-700 dark:bg-navy-950 dark:text-white"
+        />
+        <Button type="submit" disabled={link.isPending || !serial.trim()}>
+          {link.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {t("Vincular medidor", "Link meter")}
+        </Button>
+      </form>
+      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+    </Card>
+  );
+}
+
 function PeriodCompare({
   data,
   days,
@@ -176,6 +256,7 @@ function PeriodCompare({
     </div>
   );
 }
+
 function Segmented({
   value,
   onChange,
