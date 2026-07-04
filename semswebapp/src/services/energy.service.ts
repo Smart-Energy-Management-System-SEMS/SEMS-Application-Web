@@ -185,3 +185,54 @@ export async function unlinkMeter(meterId: string): Promise<void> {
   }
   await api.delete(`${BASE}/energy-meters/${meterId}`);
 }
+// --- Resúmenes por periodo (RF-MON-06): semana y mes ---
+export interface PeriodSummary {
+  key: string;   // clave interna (2026-S27 / 2026-07)
+  label: string; // etiqueta legible
+  kwh: number;
+  cost: number;
+}
+export interface ConsumptionSummary {
+  weekly: PeriodSummary[];
+  monthly: PeriodSummary[];
+}
+
+// Semana ISO (año-semana) a partir de una fecha.
+function isoWeekKey(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7; // lunes=0
+  date.setUTCDate(date.getUTCDate() - dayNum + 3); // jueves de esa semana
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((date.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${date.getUTCFullYear()}-S${String(week).padStart(2, "0")}`;
+}
+
+// Agrupa las lecturas diarias en resúmenes por semana y por mes.
+export async function getConsumptionSummary(userId: string, days = 90): Promise<ConsumptionSummary> {
+  const readings = await getReadings(userId, days); // [{date, kwh, cost}] por día
+  const weekMap = new Map<string, PeriodSummary>();
+  const monthMap = new Map<string, PeriodSummary>();
+
+  for (const r of readings) {
+    const d = new Date(r.date + "T00:00:00");
+    if (isNaN(d.getTime())) continue;
+
+    const wk = isoWeekKey(d);
+    const w = weekMap.get(wk) ?? { key: wk, label: wk.replace("-S", " · Sem "), kwh: 0, cost: 0 };
+    w.kwh += r.kwh; w.cost += r.cost;
+    weekMap.set(wk, w);
+
+    const mo = r.date.slice(0, 7); // YYYY-MM
+    const m = monthMap.get(mo) ?? { key: mo, label: mo, kwh: 0, cost: 0 };
+    m.kwh += r.kwh; m.cost += r.cost;
+    monthMap.set(mo, m);
+  }
+
+  const round = (arr: PeriodSummary[]) =>
+    arr.map((p) => ({ ...p, kwh: +p.kwh.toFixed(2), cost: +p.cost.toFixed(2) }));
+
+  return {
+    weekly: round([...weekMap.values()]).slice(-8),   // últimas 8 semanas
+    monthly: round([...monthMap.values()]).slice(-6), // últimos 6 meses
+  };
+}

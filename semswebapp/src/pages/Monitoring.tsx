@@ -9,7 +9,7 @@ import { getGoals } from "../lib/homeStore";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { soles, kwh as fmtKwh } from "../lib/format";
-
+import PeriodSummaryCard from "../components/PeriodSummaryCard";
 // Lee el código de serie del medidor desde el texto del QR. Acepta texto plano
 // (el serial) o un JSON con { serial | meter_serial, model }.
 function parseMeterQr(text: string): { serial: string; model?: string } {
@@ -104,7 +104,8 @@ export default function Monitoring() {
           <ConsumptionChart data={readings.data} metric={metric} />
         )}
       </Card>
-
+      {/* Resúmenes por semana y mes (RF-MON-06) */}
+      {user && <PeriodSummaryCard userId={user.id} />}
       {/* Detalle por dispositivo */}
       <Card>
         <CardTitle>{t("Detalle por dispositivo", "Device breakdown")}</CardTitle>
