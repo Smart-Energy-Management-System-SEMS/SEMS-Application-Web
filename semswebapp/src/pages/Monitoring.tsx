@@ -1,12 +1,28 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Gauge, Zap, Receipt, TrendingUp, TrendingDown, Plus, Trash2, Loader2 } from "lucide-react";
+import { Gauge, Zap, Receipt, TrendingUp, TrendingDown, Plus, Trash2, Loader2, QrCode } from "lucide-react";
 import { Card, CardTitle, Button, Loading, ErrorState, Badge } from "../components/ui";
 import ConsumptionChart from "../components/charts/ConsumptionChart";
+import QrScannerModal from "../components/QrScannerModal";
 import { getReadings, getDeviceConsumption, getMeters, linkMeter, unlinkMeter, getPeriodComparison } from "../services/energy.service";
+import { getGoals } from "../lib/homeStore";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { soles, kwh as fmtKwh } from "../lib/format";
+
+// Lee el código de serie del medidor desde el texto del QR. Acepta texto plano
+// (el serial) o un JSON con { serial | meter_serial, model }.
+function parseMeterQr(text: string): { serial: string; model?: string } {
+  const raw = (text ?? "").trim();
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const serial = String(obj.serial ?? obj.meter_serial ?? obj.serialNumber ?? obj.serie ?? "");
+    if (serial) return { serial, model: obj.model ? String(obj.model) : undefined };
+  } catch {
+    /* no era JSON: lo tratamos como serial plano */
+  }
+  return { serial: raw };
+}
 
 export default function Monitoring() {
   const { user } = useAuth();
@@ -20,6 +36,9 @@ export default function Monitoring() {
 
   const totalKwh = readings.data?.reduce((s, r) => s + r.kwh, 0) ?? 0;
   const totalCost = readings.data?.reduce((s, r) => s + r.cost, 0) ?? 0;
+
+  // Umbrales por dispositivo definidos por el usuario (RF-ANL-05).
+  const goals = getGoals(user?.id ?? "anon");
 
   return (
     <div className="space-y-6">
@@ -105,14 +124,23 @@ export default function Monitoring() {
                 </tr>
               </thead>
               <tbody>
-                {consumption.data.map((d) => (
-                  <tr key={d.deviceId} className="border-b border-slate-50 last:border-0 dark:border-navy-800/50">
-                    <td className="py-3 font-medium text-slate-900 dark:text-white">{d.deviceName}</td>
-                    <td className="py-3 text-right text-slate-600 dark:text-slate-300">{fmtKwh(d.kwh)}</td>
-                    <td className="py-3 text-right text-slate-600 dark:text-slate-300">{soles(d.cost)}</td>
-                    <td className="py-3 text-right font-semibold text-blue-600 dark:text-blue-400">{d.pct}%</td>
-                  </tr>
-                ))}
+                {consumption.data.map((d) => {
+                  const goal = goals.perDevice[d.deviceId] ?? 0;
+                  const over = goal > 0 && d.kwh > goal; // supera el umbral configurado
+                  return (
+                    <tr key={d.deviceId} className="border-b border-slate-50 last:border-0 dark:border-navy-800/50">
+                      <td className="py-3 font-medium text-slate-900 dark:text-white">
+                        <span className="flex items-center gap-2">
+                          {d.deviceName}
+                          {over && <Badge color="rose">{t("Desviación", "Deviation")}</Badge>}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right text-slate-600 dark:text-slate-300">{fmtKwh(d.kwh)}</td>
+                      <td className="py-3 text-right text-slate-600 dark:text-slate-300">{soles(d.cost)}</td>
+                      <td className="py-3 text-right font-semibold text-blue-600 dark:text-blue-400">{d.pct}%</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -127,11 +155,12 @@ function MetersManager({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const [serial, setSerial] = useState("");
   const [error, setError] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
 
   const meters = useQuery({ queryKey: ["meters", userId], queryFn: () => getMeters(userId) });
 
   const link = useMutation({
-    mutationFn: () => linkMeter(userId, serial.trim()),
+    mutationFn: (p: { serial: string; model?: string }) => linkMeter(userId, p.serial, p.model),
     onSuccess: () => {
       setSerial("");
       setError("");
@@ -148,12 +177,22 @@ function MetersManager({ userId }: { userId: string }) {
   const onLink = (e: React.FormEvent) => {
     e.preventDefault();
     if (!serial.trim()) return;
-    link.mutate();
+    link.mutate({ serial: serial.trim() });
+  };
+
+  // Resultado del escaneo: mostramos el serial y vinculamos automáticamente.
+  const onScan = (text: string) => {
+    setScanOpen(false);
+    const { serial: s, model } = parseMeterQr(text);
+    if (!s) return;
+    setSerial(s);
+    link.mutate({ serial: s, model });
   };
 
   return (
     <Card>
       <CardTitle action={<Gauge className="h-4 w-4 text-slate-400" />}>{t("Medidores EOS", "EOS meters")}</CardTitle>
+      {scanOpen && <QrScannerModal onResult={onScan} onClose={() => setScanOpen(false)} />}
 
       {meters.isLoading ? (
         <Loading />
@@ -195,7 +234,7 @@ function MetersManager({ userId }: { userId: string }) {
         </ul>
       )}
 
-      {/* Vincular un nuevo medidor por código de serie */}
+      {/* Vincular un nuevo medidor: por QR o por código de serie */}
       <form onSubmit={onLink} className="mt-4 flex flex-col gap-2 sm:flex-row">
         <input
           value={serial}
@@ -203,6 +242,14 @@ function MetersManager({ userId }: { userId: string }) {
           placeholder={t("Código de serie del medidor EOS", "EOS meter serial code")}
           className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-navy-700 dark:bg-navy-950 dark:text-white"
         />
+        <button
+          type="button"
+          onClick={() => { setError(""); setScanOpen(true); }}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:border-blue-400 hover:text-blue-600 dark:border-navy-700 dark:text-slate-300 dark:hover:text-blue-400"
+        >
+          <QrCode className="h-4 w-4" />
+          {t("Escanear QR", "Scan QR")}
+        </button>
         <Button type="submit" disabled={link.isPending || !serial.trim()}>
           {link.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           {t("Vincular medidor", "Link meter")}
