@@ -1,11 +1,14 @@
 import { api, DEMO_MODE, delay } from "../lib/api";
 import { demoReadings, demoConsumption, demoMeters } from "../lib/demo";
 import { listDevices } from "./devices.service";
+import { getTariff, DEFAULT_TARIFF } from "../lib/tariff";
 import type { EnergyReading, DeviceConsumption, EnergyMeter } from "../types";
 
+// Energy Monitoring Service (vía API Gateway, recursos bajo /api/v1).
 const BASE = "/api/v1";
-const FALLBACK_PRICE = 0.78; // S/ por kWh referencial
 
+// Precio referencial S/ por kWh si el servicio de pricing no responde.
+const FALLBACK_PRICE = DEFAULT_TARIFF;
 interface RawReading { device_id: string; energy_kwh: number; timestamp: string; estimated_cost?: number; }
 interface RawConsumption { device_id: string; device_name: string; total_kwh: number; cost_estimate_soles: number; }
 interface RawMeter { id: string; meter_serial: string; model: string; status: string; }
@@ -15,7 +18,11 @@ async function getReadingsRaw(userId: string, limit = 200): Promise<RawReading[]
   return data ?? [];
 }
 
+// Precio actual por kWh. Si el jefe de casa configuró una tarifa, esa manda;
+// si no, usamos la del servicio de energía y, en último caso, el fallback.
 export async function getPricePerKwh(): Promise<number> {
+  const custom = getTariff();
+  if (custom) return custom;
   if (DEMO_MODE) return FALLBACK_PRICE;
   try {
     const { data } = await api.get<{ price_per_kwh: number }>(`${BASE}/energy/pricing/current`);

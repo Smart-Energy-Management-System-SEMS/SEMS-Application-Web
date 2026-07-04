@@ -189,13 +189,21 @@ export default function Alerts() {
             ) : prefs.isError ? (
               <ErrorState />
             ) : (
-              <ul className="space-y-3">
-                {prefs.data!.map((p) => (
-                  <li key={p.channel} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-700 dark:text-slate-200">{p.label}</span>
-                    <Toggle on={p.enabled} onClick={() => togglePref.mutate(p)} />
-                  </li>
-                ))}
+                            <ul className="space-y-3">
+                {[
+                  { channel: "PUSH" as const, label: t("Plataforma web", "Web platform") },
+                  { channel: "EMAIL" as const, label: t("Correo electrónico", "Email") },
+                  { channel: "SMS" as const, label: t("SMS", "SMS") },
+                ].map(({ channel, label }) => {
+                  const current = prefs.data!.find((p) => p.channel === channel);
+                  const enabled = current?.enabled ?? false;
+                  return (
+                    <li key={channel} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700 dark:text-slate-200">{label}</span>
+                      <Toggle on={enabled} onClick={() => togglePref.mutate({ channel, label, enabled })} />
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Card>

@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Home, Target, Save, Check } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Home, Target, Save, Check, Coins } from "lucide-react";
 import { Card, CardTitle, Button, Loading, ErrorState, Badge } from "../components/ui";
 import { Field, inputCls } from "./Login";
 import { getDashboardSummary } from "../services/dashboard.service";
 import { getDeviceConsumption } from "../services/energy.service";
 import { kwh as fmtKwh } from "../lib/format";
 import { getHomeProfile, saveHomeProfile, getGoals, saveGoals, type Goals } from "../lib/homeStore";
+import { getTariff, saveTariff, DEFAULT_TARIFF } from "../lib/tariff";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 
@@ -15,8 +16,24 @@ export default function Household() {
   const { t } = useLang();
   const uid = user?.id ?? "anon";
 
+  const qc = useQueryClient();
   const summary = useQuery({ queryKey: ["summary", user?.id], queryFn: () => getDashboardSummary(user!.id), enabled: !!user });
   const consumption = useQuery({ queryKey: ["consumption", user?.id], queryFn: () => getDeviceConsumption(user!.id), enabled: !!user });
+
+  // Tarifa energética (S/ por kWh) que gestiona el jefe de casa.
+  const [tariff, setTariff] = useState<string>(() => String(getTariff() ?? DEFAULT_TARIFF));
+  const [savedTariff, setSavedTariff] = useState(false);
+  const onSaveTariff = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveTariff(Number(tariff));
+    setSavedTariff(true);
+    setTimeout(() => setSavedTariff(false), 2000);
+    // Recalcula costos con la nueva tarifa.
+    qc.invalidateQueries({ queryKey: ["consumption"] });
+    qc.invalidateQueries({ queryKey: ["readings"] });
+    qc.invalidateQueries({ queryKey: ["summary"] });
+    qc.invalidateQueries({ queryKey: ["comparison"] });
+  };
 
   // Perfil del hogar
   const [profile, setProfile] = useState(() => getHomeProfile(uid));
@@ -167,6 +184,39 @@ export default function Household() {
           </div>
         </Card>
       </div>
+
+      {/* Tarifa energética (gestión del jefe de casa) */}
+      <Card>
+        <CardTitle action={<Coins className="h-4 w-4 text-slate-400" />}>{t("Tarifa energética", "Energy tariff")}</CardTitle>
+        <p className="mb-3 text-xs text-slate-400">
+          {t("Precio por kWh que usa el cálculo de costos de tu hogar.", "Price per kWh used to estimate your home's costs.")}
+        </p>
+        <form onSubmit={onSaveTariff} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="sm:max-w-xs sm:flex-1">
+            <Field label={t("Precio por kWh (S/)", "Price per kWh (S/)")}>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={tariff}
+                onChange={(e) => setTariff(e.target.value)}
+                placeholder={String(DEFAULT_TARIFF)}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="submit">
+              <Save className="h-4 w-4" /> {t("Guardar tarifa", "Save tariff")}
+            </Button>
+            {savedTariff && (
+              <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                <Check className="h-4 w-4" /> {t("Guardado", "Saved")}
+              </span>
+            )}
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }
