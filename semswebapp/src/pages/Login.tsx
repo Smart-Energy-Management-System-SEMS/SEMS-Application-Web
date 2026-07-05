@@ -59,6 +59,13 @@ export default function Login() {
           />
         </Field>
 
+                <div className="text-right -mt-1">
+          <Link to="/forgot-password" className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+            {t("¿Olvidaste tu contraseña?", "Forgot your password?")}
+          </Link>
+        </div>
+
+
         {error && <p className="text-sm text-rose-600">{error}</p>}
 
         <button

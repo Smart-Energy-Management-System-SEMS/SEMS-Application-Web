@@ -13,6 +13,9 @@ import NotFound from "./pages/NotFound";
 import Reports from "./pages/Reports";
 import Household from "./pages/Household";
 import Settings from "./pages/Settings";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyAccount from "./pages/VerifyAccount";
 export default function App() {
   return (
     <BrowserRouter>
@@ -31,6 +34,9 @@ export default function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/household" element={<Household />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify" element={<VerifyAccount />} />
           </Route>
         </Route>
 

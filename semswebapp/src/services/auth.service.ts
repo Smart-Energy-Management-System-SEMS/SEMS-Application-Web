@@ -106,3 +106,23 @@ export async function getMe(): Promise<User> {
   if (!user) throw new Error("No hay sesión válida");
   return user;
 }
+
+// --- Recuperación de cuenta y verificación (RF-NOT-03 / RF-AUTH-01) ---
+
+// Inicia la recuperación: el IAM publica el evento y Alert manda el correo.
+export async function forgotPassword(email: string): Promise<void> {
+  if (DEMO_MODE) { await delay(400); return; }
+  await api.post("/api/v1/auth/forgot-password", { emailAddress: email });
+}
+
+// Establece una nueva contraseña usando el token del correo.
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  if (DEMO_MODE) { await delay(400); return; }
+  await api.post("/api/v1/auth/reset-password", { token, newPassword });
+}
+
+// Verifica (activa) la cuenta con el token del correo.
+export async function verifyAccount(token: string): Promise<void> {
+  if (DEMO_MODE) { await delay(400); return; }
+  await api.get("/api/v1/auth/verify", { params: { token } });
+}
