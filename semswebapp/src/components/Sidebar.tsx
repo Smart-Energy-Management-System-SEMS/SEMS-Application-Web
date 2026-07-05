@@ -1,22 +1,22 @@
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  LayoutDashboard, Cpu, Activity, LineChart, Bell, FileText, Home, CreditCard, Zap, X,
+  LayoutDashboard, Cpu, Activity, LineChart, Bell, FileText, Home, CreditCard, Zap, X, Lock,
 } from "lucide-react";
 import { getMySubscription } from "../services/subscriptions.service";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
-
+import { usePlanTier } from "../hooks/usePlan";
+import { hasTier, type PlanTier } from "../lib/plan";
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t } = useLang();
-  const nav = [
+    const { t } = useLang();
+  const tier = usePlanTier();
+  const nav: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean; min?: PlanTier }[] = [
     { to: "/", label: t("Resumen", "Overview"), icon: LayoutDashboard, end: true },
     { to: "/devices", label: t("Dispositivos", "Devices"), icon: Cpu },
     { to: "/monitoring", label: t("Monitoreo", "Monitoring"), icon: Activity },
-    { to: "/analytics", label: t("Analítica", "Analytics"), icon: LineChart },
-    { to: "/alerts", label: t("Alertas", "Alerts"), icon: Bell },
-    { to: "/reports", label: t("Informes", "Reports"), icon: FileText },
-    { to: "/subscription", label: t("Suscripción", "Subscription"), icon: CreditCard },
+    { to: "/analytics", label: t("Analítica", "Analytics"), icon: LineChart, min: "plus" },    { to: "/alerts", label: t("Alertas", "Alerts"), icon: Bell },
+    { to: "/reports", label: t("Reportes", "Reports"), icon: FileText, min: "plus" },    { to: "/subscription", label: t("Suscripción", "Subscription"), icon: CreditCard },
     { to: "/household", label: t("Hogar", "Household"), icon: Home },
 
   ];
@@ -63,8 +63,9 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                     }`
                   }
                 >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
+                                    <item.icon className="h-5 w-5" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.min && !hasTier(tier, item.min) && <Lock className="h-3.5 w-3.5 text-slate-400" />}
                 </NavLink>
               </li>
             ))}

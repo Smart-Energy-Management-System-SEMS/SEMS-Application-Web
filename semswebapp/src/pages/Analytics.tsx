@@ -12,7 +12,9 @@ import {
 import { soles, kwh as fmtKwh, pct } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
-
+import { usePlanTier } from "../hooks/usePlan";
+import { hasTier } from "../lib/plan";
+import UpgradeGate from "../components/UpgradeGate";
 export default function Analytics() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -26,7 +28,22 @@ export default function Analytics() {
     mutationFn: applyRecommendation,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recommendations"] }),
   });
-
+  const tier = usePlanTier();
+  if (!hasTier(tier, "plus")) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">{t("Analítica", "Analytics")}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t("Recomendaciones, anomalías y proyección de tu factura.", "Recommendations, anomalies and your bill forecast.")}</p>
+        </div>
+        <UpgradeGate
+          required="plus"
+          title={t("Analítica avanzada", "Advanced analytics")}
+          description={t("Las recomendaciones personalizadas, la detección de anomalías y la proyección de factura están disponibles desde el plan Plus.", "Personalized recommendations, anomaly detection and bill forecasting are available from the Plus plan.")}
+        />
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <div>

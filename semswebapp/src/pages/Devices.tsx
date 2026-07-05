@@ -8,7 +8,9 @@ import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { CONSUMPTION_PROFILES, profileById, getDeviceExtras, saveDeviceExtras, type DeviceExtras } from "../lib/deviceExtras";
 import type { Device, DeviceStatus, CreateDevicePayload } from "../types";
-
+import { usePlanTier } from "../hooks/usePlan";
+import { DEVICE_LIMIT, TIER_LABEL } from "../lib/plan";
+import { Link } from "react-router-dom";
 const statusColor: Record<DeviceStatus, "green" | "slate" | "amber"> = {
   ACTIVE: "green",
   INACTIVE: "slate",
@@ -61,17 +63,33 @@ export default function Devices() {
     },
   });
 
+  const tier = usePlanTier();
+  const limit = DEVICE_LIMIT[tier];
+  const count = devices.data?.length ?? 0;
+  const atLimit = count >= limit;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-display text-2xl font-extrabold text-slate-900 dark:text-white">{t("Dispositivos", "Devices")}</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t("Gestiona los equipos vinculados a tu medidor.", "Manage the devices linked to your meter.")}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {t("Gestiona los equipos vinculados a tu medidor.", "Manage the devices linked to your meter.")}
+            {Number.isFinite(limit) && ` · ${count}/${limit} (${TIER_LABEL[tier]})`}
+          </p>
         </div>
-        <Button onClick={() => setOpen(true)}>
+        <Button onClick={() => setOpen(true)} disabled={atLimit}>
           <Plus className="h-4 w-4" /> {t("Agregar", "Add")}
         </Button>
       </div>
+
+      {atLimit && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          {t(`Alcanzaste el límite de ${limit} dispositivos de tu plan ${TIER_LABEL[tier]}.`, `You reached your ${TIER_LABEL[tier]} plan limit of ${limit} devices.`)}{" "}
+          <Link to="/subscription" className="font-semibold underline">{t("Mejora tu plan", "Upgrade your plan")}</Link>
+          {t(" para vincular más.", " to link more.")}
+        </div>
+      )}
 
       {devices.isLoading ? (
         <Loading />
