@@ -235,3 +235,29 @@ export async function getInvoices(userId: string): Promise<Invoice[]> {
     description: `Pago ${String(p.currency ?? "PEN").toUpperCase()}`,
   }));
 }
+
+// Crea una sesión de Stripe Checkout (página alojada de Stripe) y devuelve la
+// URL a la que hay que redirigir. Con esto el pago se procesa en la ventana de
+// Stripe (RF-BILL-02) — el cliente nunca toca datos de tarjeta.
+export async function createCheckoutSession(args: {
+  userId: string;
+  amount: number;
+  subscriptionId?: string;
+  planName?: string;
+}): Promise<string> {
+  if (DEMO_MODE) {
+    await delay(300);
+    return ""; // en demo no hay redirección real
+  }
+  const origin = window.location.origin;
+  const { data } = await api.post<{ url: string }>(`${BASE}/payments/checkout-session`, {
+    user_id: args.userId,
+    subscription_id: args.subscriptionId,
+    amount: args.amount,
+    currency: "pen",
+    product_name: args.planName ? `SEMS ${args.planName}` : "SEMS",
+    success_url: `${origin}/subscription?paid=1`,
+    cancel_url: `${origin}/subscription?canceled=1`,
+  });
+  return data.url;
+}

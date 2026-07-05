@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CreditCard, Star, Plus, Loader2, Download, Trash2 } from "lucide-react";
 import { Card, CardTitle, Loading, ErrorState, Badge, Button } from "../components/ui";
@@ -9,14 +9,16 @@ import {
   cancelSubscription,
   getPaymentMethods,
   getInvoices,
-  processPayment,
+  createCheckoutSession,
   deletePaymentMethod,
-} from "../services/subscriptions.service";import { soles } from "../lib/format";
+} from "../services/subscriptions.service";
+import { soles } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LanguageContext";
 import { STRIPE_ENABLED } from "../lib/stripe";
 import AddCardModal from "../components/AddCardModal";
 import type { Subscription, SubscriptionStatus, SubscriptionPlan } from "../types/billing";
+
 const subColor: Record<SubscriptionStatus, "green" | "blue" | "rose" | "amber" | "slate"> = {
   ACTIVE: "green",
   TRIAL: "blue",
@@ -36,6 +38,7 @@ export default function Subscription() {
   const { t } = useLang();
   const [addOpen, setAddOpen] = useState(false);
   const [payError, setPayError] = useState("");
+  const [paidMsg, setPaidMsg] = useState("");
 
   const subLabel: Record<SubscriptionStatus, string> = {
     ACTIVE: t("Activa", "Active"),
@@ -54,47 +57,51 @@ export default function Subscription() {
   const methods = useQuery({ queryKey: ["paymentMethods", user?.id], queryFn: () => getPaymentMethods(user!.id), enabled: !!user });
   const invoices = useQuery({ queryKey: ["invoices", user?.id], queryFn: () => getInvoices(user!.id), enabled: !!user });
 
-  const defaultMethod = methods.data?.find((m) => m.primary) ?? methods.data?.[0];
-
+  // Elegir plan: si es de pago, abre Stripe Checkout (ventana de Stripe) y
+  // redirige; el plan se aplica al volver del pago. Si es gratis, cambia directo.
   const choose = useMutation({
     mutationFn: async (plan: SubscriptionPlan) => {
       if (plan.price > 0) {
-        if (!defaultMethod) throw new Error("NO_CARD");
-        await processPayment({
+        // Guardamos el plan elegido para aplicarlo al regresar del pago.
+        localStorage.setItem("sems-pending-plan", JSON.stringify({ planId: plan.id }));
+        const url = await createCheckoutSession({
           userId: user!.id,
-          paymentMethodId: defaultMethod.id,
           amount: plan.price,
           subscriptionId: sub.data?.id,
+          planName: plan.name,
         });
+        if (url) {
+          window.location.href = url; // → ventana de Stripe
+          return;
+        }
+        // Sin URL (modo demo): aplica el cambio directo.
       }
-      try {
-        await changePlan({ planId: plan.id, subscriptionId: sub.data?.id, userId: user!.id });
-      } catch {
-        /* noop */
-      }
+      await changePlan({ planId: plan.id, subscriptionId: sub.data?.id, userId: user!.id });
     },
-        onMutate: () => setPayError(""),
+    onMutate: () => { setPayError(""); setPaidMsg(""); },
     onSuccess: (_data, plan) => {
-      // Refleja el nuevo plan en la UI al instante (el pago ya se procesó).
       qc.setQueriesData<Subscription | null>({ queryKey: ["subscription", user?.id] }, (old) =>
-        old
-          ? { ...old, planId: plan.id, planName: plan.name, price: plan.price, period: plan.period, status: "ACTIVE" }
-          : old
+        old ? { ...old, planId: plan.id, planName: plan.name, price: plan.price, period: plan.period, status: "ACTIVE" } : old
       );
       qc.invalidateQueries({ queryKey: ["invoices"] });
     },
-    onError: (e: unknown) =>
-      setPayError(
-        (e as Error)?.message === "NO_CARD"
-          ? t("Agrega una tarjeta antes de elegir un plan de pago.", "Add a card before choosing a paid plan.")
-          : t("No se pudo completar el pago. Inténtalo de nuevo.", "Could not complete the payment. Please try again.")
-      ),
+    onError: () => setPayError(t("No se pudo iniciar el pago. Inténtalo de nuevo.", "Could not start the payment. Please try again.")),
+  });
+
+  // Pagar una factura pendiente → abre Stripe Checkout por ese monto.
+  const payInvoice = useMutation({
+    mutationFn: async (amount: number) => {
+      const url = await createCheckoutSession({ userId: user!.id, amount, subscriptionId: sub.data?.id });
+      if (url) window.location.href = url;
+    },
+    onError: () => setPayError(t("No se pudo iniciar el pago.", "Could not start the payment.")),
   });
 
   const removeCard = useMutation({
     mutationFn: deletePaymentMethod,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["paymentMethods"] }),
   });
+
   const cancel = useMutation({
     mutationFn: () => cancelSubscription(sub.data!.id),
     onSuccess: () => {
@@ -103,6 +110,30 @@ export default function Subscription() {
       );
     },
   });
+
+  // Al volver de Stripe Checkout: aplica el plan pendiente y refresca.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paid") === "1") {
+      const raw = localStorage.getItem("sems-pending-plan");
+      if (raw) {
+        try {
+          const { planId } = JSON.parse(raw) as { planId: string };
+          changePlan({ planId, subscriptionId: sub.data?.id, userId: user!.id }).catch(() => {});
+        } catch { /* noop */ }
+        localStorage.removeItem("sems-pending-plan");
+      }
+      setPaidMsg(t("¡Pago realizado! Tu comprobante llegará por correo.", "Payment complete! Your receipt will arrive by email."));
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["subscription"] });
+      window.history.replaceState({}, "", "/subscription");
+    } else if (params.get("canceled") === "1") {
+      setPayError(t("Pago cancelado.", "Payment canceled."));
+      window.history.replaceState({}, "", "/subscription");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -110,7 +141,7 @@ export default function Subscription() {
         <p className="text-sm text-slate-500 dark:text-slate-400">{t("Gestiona tu plan, métodos de pago y facturas.", "Manage your plan, payment methods and invoices.")}</p>
       </div>
 
-            {/* Suscripción actual */}
+      {/* Suscripción actual */}
       <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white dark:from-blue-600 dark:to-blue-800">
         {sub.isLoading ? (
           <div className="py-6 text-center text-blue-100">{t("Cargando...", "Loading...")}</div>
@@ -147,6 +178,11 @@ export default function Subscription() {
       {/* Planes */}
       <div>
         <h3 className="mb-4 font-display text-lg font-bold text-slate-900 dark:text-white">{t("Cambia de plan", "Change plan")}</h3>
+        {paidMsg && (
+          <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+            {paidMsg}
+          </p>
+        )}
         {payError && (
           <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
             {payError}
@@ -172,7 +208,7 @@ export default function Subscription() {
                 >
                   {plan.recommended && (
                     <span className="absolute -top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-                      <Star className="h-3 w-3" fill="white" /> {t("Recomendado", "Recommended")}
+                      <Star className="h-3 w-3" fill="white" /> Recomendado
                     </span>
                   )}
                   <h4 className="font-display text-lg font-bold text-slate-900 dark:text-white">{plan.name}</h4>
@@ -287,6 +323,15 @@ export default function Subscription() {
                   </div>
                   <span className="text-sm font-semibold text-slate-900 dark:text-white">{soles(inv.amount)}</span>
                   <Badge color={invColor[inv.status]}>{invLabel[inv.status]}</Badge>
+                  {inv.status === "PENDING" && (
+                    <button
+                      onClick={() => payInvoice.mutate(inv.amount)}
+                      disabled={payInvoice.isPending}
+                      className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {t("Pagar", "Pay")}
+                    </button>
+                  )}
                   <button className="text-slate-400 transition-colors hover:text-blue-600" aria-label={t("Descargar", "Download")}>
                     <Download className="h-4 w-4" />
                   </button>

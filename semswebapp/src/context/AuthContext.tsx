@@ -83,10 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const logout = () => {
+    const logout = () => {
     tokenStore.clear();
     localStorage.removeItem(USER_KEY);
     setUser(null);
+    // Redirección dura: garantiza volver al login sin depender del router
+    // ni de quién llame a logout (limpia además todo el estado en memoria).
+    window.location.replace("/login");
   };
 
   return (
